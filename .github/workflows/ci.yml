@@ -33,12 +33,12 @@ jobs:
       CAIXA_BD_URL: postgres://caixa:caixa@localhost:5432/caixa
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           persist-credentials: false
           fetch-depth: 0 # gitleaks varre o historico inteiro
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
 
