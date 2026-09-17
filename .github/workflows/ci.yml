@@ -66,11 +66,10 @@ jobs:
       - name: testes unitarios
         run: go test -race -count=1 ./...
 
-      - name: migracoes
+      - name: migracoes (caixactl migrar, duas vezes — a segunda prova a idempotencia)
         run: |
-          for m in migracoes/*.sql; do
-            psql "$CAIXA_BD_URL" -v ON_ERROR_STOP=1 -f "$m"
-          done
+          go run ./cmd/caixactl migrar
+          go run ./cmd/caixactl migrar
 
       - name: testes de integracao
         run: go test -tags=integracao -race -count=1 ./...

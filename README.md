@@ -43,16 +43,19 @@ testify: `net/http.ServeMux`, `pgx` com SQL na mão, `log/slog`, `testing` +
 Pré-requisitos: Go 1.27+, PostgreSQL 17 (nativo ou `deploy/docker-compose.yml`).
 
 ```powershell
-# 1. banco e migracoes (uma vez)
+# 1. banco (uma vez)
 psql -U postgres -h localhost -c "CREATE DATABASE caixa"
-psql -U postgres -h localhost -d caixa -f migracoes/001_lancamentos.sql
-psql -U postgres -h localhost -d caixa -f migracoes/002_ocorrencias.sql
 
 # 2. variaveis de ambiente: crie local.ps1 (gitignored) com
 #    $env:CAIXA_BD_URL = "postgres://postgres:SENHA@localhost:5432/caixa"
 . .\local.ps1
 
-# 3. subir
+# 3. migracoes: embutidas no binario via go:embed, aplicadas pelo migrador
+#    proprio (tabela migracoes_aplicadas, uma transacao por arquivo,
+#    advisory lock). Idempotente: rode em todo deploy.
+go run ./cmd/caixactl migrar
+
+# 4. subir
 go run ./cmd/api
 ```
 

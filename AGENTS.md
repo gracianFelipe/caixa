@@ -46,7 +46,9 @@ Padrão adotado de projeto de referência, com uma adaptação deliberada.
 
 * **Toda mudança nasce como spec** em `.specs/changes/NNN-nome/`, numerada
   (a ordem importa), escrita antes do código. Spec executada vai para
-  `.specs/archive/`. As fases do plano são as specs.
+  `.specs/archive/`. Uma spec cabe num dia de trabalho: fase do plano com
+  várias entregas independentes é fatiada (Fase 2 = specs 002-005), e a
+  primeira spec da fase lista o fatiamento.
 * **Skills do repo** ficam em `.claude/skills/`: o jeito *deste* projeto de
   escrever cada padrão (repositório pgx, handler, construtor de domínio). Regra
   local: **a skill é escrita depois de fazer o primeiro caso à mão**, destilando
@@ -168,9 +170,12 @@ roda tudo isso com `-race`, um Postgres 17 de serviço, `govulncheck` e Gitleaks
 
 Fica na raiz: `internal/aplicacao` (casos de uso + `portas.go`),
 `internal/adaptadores/{entrada/web, saida/postgres, saida/relogio}`,
-`cmd/api`, `migracoes/`, `deploy/`, `.specs/` (specs numeradas; executadas vão
-para `archive/`), `.claude/skills/` (`construtor-de-dominio`,
-`repositorio-pgx`, `handler-http` — destiladas da spec 001), `docs/revisao-ia.md`.
+`cmd/api`, `cmd/caixactl` (subcomandos por `flag.NewFlagSet`; hoje `migrar`),
+`migracoes/` (SQLs + pacote `migracoes` com `go:embed`; migrador próprio em
+`saida/postgres/migrador.go` — decisão na spec 002, sem goose), `deploy/`,
+`.specs/` (specs numeradas; executadas vão para `archive/`),
+`.claude/skills/` (`construtor-de-dominio`, `repositorio-pgx`, `handler-http`
+— destiladas da spec 001), `docs/revisao-ia.md`.
 Criar AGENTS.md filho em `internal/adaptadores/` quando nascer o segundo
 adaptador de entrada (Telegram, Fase 3).
 
