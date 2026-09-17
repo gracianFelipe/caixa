@@ -1,0 +1,84 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Permissao minima para o token do workflow: so ler o repositorio.
+permissions:
+  contents: read
+
+jobs:
+  verificar:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: caixa
+          POSTGRES_USER: caixa
+          # Credencial descartavel de um container que vive so durante o job.
+          POSTGRES_PASSWORD: caixa
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U caixa -d caixa"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+    env:
+      CAIXA_BD_URL: postgres://caixa:caixa@localhost:5432/caixa
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0 # gitleaks varre o historico inteiro
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: gofmt
+        run: |
+          fora=$(gofmt -l .)
+          if [ -n "$fora" ]; then echo "arquivos fora do gofmt:"; echo "$fora"; exit 1; fi
+
+      - name: go vet
+        run: |
+          go vet ./...
+          go vet -tags=integracao ./...
+
+      - name: regra de dependencia — dominio importa so a stdlib
+        run: |
+          fora=$(go list -deps ./internal/dominio/... \
+            | grep -v '^github.com/gracianFelipe/caixa/' \
+            | grep -vE '^[a-z0-9_/]+$' || true)
+          if [ -n "$fora" ]; then
+            echo "internal/dominio importa fora da stdlib:"
+            echo "$fora"
+            exit 1
+          fi
+
+      - name: testes unitarios
+        run: go test -race -count=1 ./...
+
+      - name: migracoes
+        run: |
+          for m in migracoes/*.sql; do
+            psql "$CAIXA_BD_URL" -v ON_ERROR_STOP=1 -f "$m"
+          done
+
+      - name: testes de integracao
+        run: go test -tags=integracao -race -count=1 ./...
+
+      - name: govulncheck
+        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+
+      - name: gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

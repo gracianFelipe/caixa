@@ -1,0 +1,39 @@
+# Segredos — repo publico. Nada aqui pode vazar.
+local.ps1
+.env
+.env.*
+*.pem
+*.key
+
+# Extratos e dados reais: PII financeira, nunca versionada.
+*.ofx
+*.qfx
+extratos/
+*.eml
+
+# Binarios compilados
+/caixa
+/caixactl
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Artefatos de teste
+*.test
+*.out
+coverage.*
+
+# Go workspace local
+go.work
+go.work.sum
+
+# Editor / SO
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini
+
+# Saida de build e artefatos de execucao local
+/bin/

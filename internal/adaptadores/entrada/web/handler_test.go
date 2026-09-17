@@ -1,0 +1,210 @@
+package web
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"errors"
+	"io"
+	"log/slog"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/gracianFelipe/caixa/internal/dominio/competencia"
+	"github.com/gracianFelipe/caixa/internal/dominio/identidade"
+	"github.com/gracianFelipe/caixa/internal/dominio/lancamento"
+)
+
+var saoPaulo = time.FixedZone("America/Sao_Paulo", -3*60*60)
+
+// servicoFalso implementa a interface Lancamentos deste pacote sem banco.
+// Guarda o que recebeu para o teste inspecionar e devolve o que foi programado.
+type servicoFalso struct {
+	recebido lancamento.Dados
+	listados []lancamento.Lancamento
+	erro     error
+}
+
+func (f *servicoFalso) Registrar(_ context.Context, d lancamento.Dados) (lancamento.Lancamento, error) {
+	f.recebido = d
+	if f.erro != nil {
+		return lancamento.Lancamento{}, f.erro
+	}
+	id := identidade.ID{0x01, 0x92, 0x6a, 0x5c, 0x12, 0x34, 0x70, 0x00, 0x80, 0x00, 0, 0, 0, 0, 0, 1}
+	return lancamento.Novo(id, d, saoPaulo)
+}
+
+func (f *servicoFalso) Listar(context.Context, competencia.Competencia) ([]lancamento.Lancamento, error) {
+	if f.erro != nil {
+		return nil, f.erro
+	}
+	return f.listados, nil
+}
+
+func logSilencioso() *slog.Logger {
+	return slog.New(slog.NewTextHandler(io.Discard, nil))
+}
+
+const corpoValido = `{"valor_centavos":-4790,"meio":"pix","contraparte":"SUPERMERCADO XYZ","ocorrido_em":"2026-09-17T15:00:00Z"}`
+
+func TestRegistrar(t *testing.T) {
+	casos := []struct {
+		nome   string
+		corpo  string
+		erro   error // programado no servico falso
+		status int
+	}{
+		{"valido", corpoValido, nil, http.StatusCreated},
+		{"json quebrado", `{"valor_centavos":`, nil, http.StatusBadRequest},
+		{"campo desconhecido", `{"valor":100,"meio":"pix","contraparte":"x","ocorrido_em":"2026-09-17T15:00:00Z"}`, nil, http.StatusBadRequest},
+		{"valor com decimal", `{"valor_centavos":47.90,"meio":"pix","contraparte":"x","ocorrido_em":"2026-09-17T15:00:00Z"}`, nil, http.StatusBadRequest},
+		{"valor como texto", `{"valor_centavos":"4790","meio":"pix","contraparte":"x","ocorrido_em":"2026-09-17T15:00:00Z"}`, nil, http.StatusBadRequest},
+		{"dois documentos", corpoValido + corpoValido, nil, http.StatusBadRequest},
+		{"vazio", ``, nil, http.StatusBadRequest},
+		{"valor zero vira 400 pelo dominio", `{"valor_centavos":0,"meio":"pix","contraparte":"x","ocorrido_em":"2026-09-17T15:00:00Z"}`, nil, http.StatusBadRequest},
+		{"meio invalido vira 400 pelo dominio", `{"valor_centavos":-100,"meio":"cheque","contraparte":"x","ocorrido_em":"2026-09-17T15:00:00Z"}`, nil, http.StatusBadRequest},
+		{"sem ocorrido_em vira 400 pelo dominio", `{"valor_centavos":-100,"meio":"pix","contraparte":"x"}`, nil, http.StatusBadRequest},
+		{"corpo acima do limite", `{"contraparte":"` + strings.Repeat("a", corpoMaximo) + `"}`, nil, http.StatusRequestEntityTooLarge},
+		{"erro de infraestrutura vira 500", corpoValido, errors.New("conexao recusada"), http.StatusInternalServerError},
+	}
+
+	for _, c := range casos {
+		t.Run(c.nome, func(t *testing.T) {
+			servico := &servicoFalso{erro: c.erro}
+			h := NovoHandler(servico, logSilencioso())
+
+			req := httptest.NewRequest(http.MethodPost, "/lancamentos", strings.NewReader(c.corpo))
+			rec := httptest.NewRecorder()
+			h.ServeHTTP(rec, req)
+
+			if rec.Code != c.status {
+				t.Fatalf("status = %d, queria %d; corpo: %s", rec.Code, c.status, rec.Body)
+			}
+			if ct := rec.Header().Get("Content-Type"); !strings.HasPrefix(ct, "application/json") {
+				t.Errorf("Content-Type = %q, queria application/json", ct)
+			}
+			if rec.Code == http.StatusInternalServerError && strings.Contains(rec.Body.String(), "conexao recusada") {
+				t.Error("detalhe do erro interno vazou para o cliente")
+			}
+		})
+	}
+}
+
+func TestRegistrarRespostaCompleta(t *testing.T) {
+	servico := &servicoFalso{}
+	h := NovoHandler(servico, logSilencioso())
+
+	req := httptest.NewRequest(http.MethodPost, "/lancamentos", strings.NewReader(corpoValido))
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	var resp respostaDeLancamento
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("resposta nao e JSON valido: %v", err)
+	}
+
+	if resp.ID != "01926a5c-1234-7000-8000-000000000001" {
+		t.Errorf("id = %q", resp.ID)
+	}
+	if resp.Competencia != "2026-09" {
+		t.Errorf("competencia = %q, queria 2026-09", resp.Competencia)
+	}
+	if resp.ValorCentavos != -4790 || resp.Valor != "-R$ 47,90" {
+		t.Errorf("valor = (%d, %q), queria (-4790, \"-R$ 47,90\")", resp.ValorCentavos, resp.Valor)
+	}
+	if servico.recebido.Contraparte != "SUPERMERCADO XYZ" {
+		t.Errorf("servico recebeu contraparte %q", servico.recebido.Contraparte)
+	}
+}
+
+func TestListar(t *testing.T) {
+	id := identidade.ID{1}
+	setembro, _ := lancamento.Novo(id, lancamento.Dados{
+		OcorridoEm: time.Date(2026, time.September, 17, 15, 0, 0, 0, time.UTC),
+		Valor:      -4790, Meio: lancamento.MeioPix, Contraparte: "Mercado",
+	}, saoPaulo)
+
+	casos := []struct {
+		nome     string
+		consulta string
+		servico  *servicoFalso
+		status   int
+		corpo    string // prefixo esperado
+	}{
+		{"com dados", "?competencia=2026-09", &servicoFalso{listados: []lancamento.Lancamento{setembro}}, http.StatusOK, `[{"id"`},
+		{"sem dados devolve lista vazia, nao null", "?competencia=2026-09", &servicoFalso{}, http.StatusOK, `[]`},
+		{"sem competencia", "", &servicoFalso{}, http.StatusBadRequest, `{"erro"`},
+		{"competencia invalida", "?competencia=2026-13", &servicoFalso{}, http.StatusBadRequest, `{"erro"`},
+		{"competencia com dia", "?competencia=2026-09-01", &servicoFalso{}, http.StatusBadRequest, `{"erro"`},
+		{"erro de infraestrutura", "?competencia=2026-09", &servicoFalso{erro: errors.New("timeout")}, http.StatusInternalServerError, `{"erro":"erro interno"}`},
+	}
+
+	for _, c := range casos {
+		t.Run(c.nome, func(t *testing.T) {
+			h := NovoHandler(c.servico, logSilencioso())
+
+			req := httptest.NewRequest(http.MethodGet, "/lancamentos"+c.consulta, nil)
+			rec := httptest.NewRecorder()
+			h.ServeHTTP(rec, req)
+
+			if rec.Code != c.status {
+				t.Fatalf("status = %d, queria %d; corpo: %s", rec.Code, c.status, rec.Body)
+			}
+			if !strings.HasPrefix(rec.Body.String(), c.corpo) {
+				t.Errorf("corpo = %s, queria prefixo %s", rec.Body, c.corpo)
+			}
+		})
+	}
+}
+
+func TestRotas(t *testing.T) {
+	h := NovoHandler(&servicoFalso{}, logSilencioso())
+
+	casos := []struct {
+		metodo string
+		rota   string
+		status int
+	}{
+		{http.MethodGet, "/saude", http.StatusOK},
+		{http.MethodPost, "/saude", http.StatusMethodNotAllowed},
+		{http.MethodDelete, "/lancamentos", http.StatusMethodNotAllowed},
+		{http.MethodGet, "/inexistente", http.StatusNotFound},
+	}
+
+	for _, c := range casos {
+		t.Run(c.metodo+" "+c.rota, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			h.ServeHTTP(rec, httptest.NewRequest(c.metodo, c.rota, nil))
+			if rec.Code != c.status {
+				t.Errorf("status = %d, queria %d", rec.Code, c.status)
+			}
+		})
+	}
+}
+
+// TestLogNaoVazaPII e a regra "Logging" do SEC-CHECK virando assercao:
+// valor e contraparte nunca aparecem no log, nem em erro interno.
+func TestLogNaoVazaPII(t *testing.T) {
+	var saida bytes.Buffer
+	log := slog.New(slog.NewJSONHandler(&saida, nil))
+	h := NovoHandler(&servicoFalso{erro: errors.New("banco caiu")}, log)
+
+	corpo := `{"valor_centavos":-987654,"meio":"pix","contraparte":"CLINICA SIGILOSA","ocorrido_em":"2026-09-17T15:00:00Z"}`
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/lancamentos?competencia=2026-09", strings.NewReader(corpo)))
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, queria 500", rec.Code)
+	}
+	for _, proibido := range []string{"987654", "CLINICA SIGILOSA", "competencia=2026-09"} {
+		if strings.Contains(saida.String(), proibido) {
+			t.Errorf("log contem %q:\n%s", proibido, saida.String())
+		}
+	}
+	if !strings.Contains(saida.String(), "banco caiu") {
+		t.Error("o detalhe do erro interno deveria estar no log do servidor")
+	}
+}
