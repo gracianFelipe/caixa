@@ -80,10 +80,20 @@ func executar(ctx context.Context, log *slog.Logger) error {
 		fuso,
 	)
 	catalogo := aplicacao.NovoCatalogo(postgres.NovoRepositorioDeCategorias(pool))
+	relatorios := aplicacao.NovoServicoDeRelatorios(
+		postgres.NovoRepositorio(pool),
+		postgres.NovoRepositorioDeOrcamentos(pool),
+		postgres.NovoRepositorioDeCategorias(pool),
+	)
 
 	servidor := &http.Server{
-		Addr:              cfg.httpEndereco,
-		Handler:           web.NovoHandler(lancamentos, catalogo, cfg.atalhoToken, log),
+		Addr: cfg.httpEndereco,
+		Handler: web.NovoHandler(web.Servicos{
+			Lancamentos: lancamentos,
+			Catalogo:    catalogo,
+			Relatorios:  relatorios,
+			AtalhoToken: cfg.atalhoToken,
+		}, log),
 		ReadHeaderTimeout: 5 * time.Second, // fecha conexao que abre e nao manda cabecalho (slowloris)
 		ReadTimeout:       10 * time.Second,
 		WriteTimeout:      10 * time.Second,

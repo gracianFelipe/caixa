@@ -87,6 +87,27 @@ func (r *repoEmMemoria) FundirProvisorio(context.Context, identidade.ID, identid
 }
 func (r *repoEmMemoria) ConfirmarProvisorio(context.Context, identidade.ID) error { return nil }
 
+func (r *repoEmMemoria) DaJanela(_ context.Context, inicio, fim competencia.Competencia) ([]lancamento.Lancamento, error) {
+	var out []lancamento.Lancamento
+	for _, l := range r.salvos {
+		if l.Situacao != lancamento.SituacaoConfirmada {
+			continue
+		}
+		c := l.Competencia
+		dentro := (c.Ano() > inicio.Ano() || (c.Ano() == inicio.Ano() && c.Mes() >= inicio.Mes())) &&
+			(c.Ano() < fim.Ano() || (c.Ano() == fim.Ano() && c.Mes() <= fim.Mes()))
+		if dentro {
+			out = append(out, l)
+		}
+	}
+	return out, nil
+}
+
+// identidadeFixa gera um id deterministico a partir de um byte.
+func identidadeFixa(n byte) (identidade.ID, error) {
+	return identidade.ID{0x01, 0x92, 0x6a, 0x5c, 0x12, 0x34, 0x70, 0x00, 0x80, 0x00, 0, 0, 0, 0, 0, n}, nil
+}
+
 func (r *repoEmMemoria) DaCompetencia(_ context.Context, c competencia.Competencia) ([]lancamento.Lancamento, error) {
 	if r.falha != nil {
 		return nil, r.falha

@@ -151,6 +151,10 @@ func (o orcamentosFixos) LimiteVigente(_ context.Context, cat categoria.ID, _ co
 	return limite, existe, nil
 }
 
+func (o orcamentosFixos) Vigentes(context.Context, competencia.Competencia) (map[categoria.ID]dinheiro.Centavos, error) {
+	return map[categoria.ID]dinheiro.Centavos(o), nil
+}
+
 type alertasEmMemoria struct {
 	emitidos map[string]bool
 }

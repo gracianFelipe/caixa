@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gracianFelipe/caixa/internal/aplicacao"
 	"github.com/gracianFelipe/caixa/internal/dominio/categoria"
 	"github.com/gracianFelipe/caixa/internal/dominio/competencia"
 	"github.com/gracianFelipe/caixa/internal/dominio/dinheiro"
@@ -35,6 +36,20 @@ type Catalogo interface {
 	Categorias(ctx context.Context) ([]categoria.Categoria, error)
 }
 
+// Relatorios gera o relatorio mensal pronto para apresentar.
+type Relatorios interface {
+	Gerar(ctx context.Context, alvo competencia.Competencia) (aplicacao.RelatorioPronto, error)
+}
+
+// Servicos agrupa o que o handler consome; struct nomeada em vez de quatro
+// parametros posicionais.
+type Servicos struct {
+	Lancamentos Lancamentos
+	Catalogo    Catalogo
+	Relatorios  Relatorios
+	AtalhoToken string
+}
+
 // Um lancamento em JSON tem ~200 bytes; 64 KiB e folga, nao permissao.
 const corpoMaximo = 64 << 10
 
@@ -46,25 +61,99 @@ var (
 type servidor struct {
 	lancamentos Lancamentos
 	catalogo    Catalogo
+	relatorios  Relatorios
 	log         *slog.Logger
 }
 
 // NovoHandler monta as rotas e devolve http.Handler, nao *ServeMux: quem
-// chama nao precisa saber como as rotas sao montadas. atalhoToken vazio
+// chama nao precisa saber como as rotas sao montadas. AtalhoToken vazio
 // desliga a rota do atalho — sem token nao existe endpoint para proteger.
-func NovoHandler(l Lancamentos, c Catalogo, atalhoToken string, log *slog.Logger) http.Handler {
-	s := &servidor{lancamentos: l, catalogo: c, log: log}
+func NovoHandler(sv Servicos, log *slog.Logger) http.Handler {
+	s := &servidor{lancamentos: sv.Lancamentos, catalogo: sv.Catalogo, relatorios: sv.Relatorios, log: log}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /saude", s.saude)
 	mux.HandleFunc("POST /lancamentos", s.registrar)
 	mux.HandleFunc("GET /lancamentos", s.listar)
 	mux.HandleFunc("GET /categorias", s.categorias)
-	if atalhoToken != "" {
-		mux.Handle("POST /atalho/lancamentos", exigirBearer(atalhoToken, http.HandlerFunc(s.capturar)))
+	mux.HandleFunc("GET /relatorio/{competencia}", s.relatorio)
+	if sv.AtalhoToken != "" {
+		mux.Handle("POST /atalho/lancamentos", exigirBearer(sv.AtalhoToken, http.HandlerFunc(s.capturar)))
 	}
 
 	return registrarAcesso(log, mux)
+}
+
+// respostaDeRelatorio e o contrato JSON do relatorio: centavos inteiros e o
+// texto formatado, com nomes resolvidos — o cliente nao precisa de segunda
+// chamada para nomear categorias.
+type respostaDeRelatorio struct {
+	Competencia       string                 `json:"competencia"`
+	TotalSaidas       int64                  `json:"total_saidas_centavos"`
+	TotalEntradas     int64                  `json:"total_entradas_centavos"`
+	Saldo             int64                  `json:"saldo_centavos"`
+	SaidasMesAnterior int64                  `json:"saidas_mes_anterior_centavos"`
+	PorCategoria      []respostaDeCategoria2 `json:"por_categoria"`
+	Sinais            []respostaDeSinal      `json:"sinais"`
+	Texto             string                 `json:"texto"`
+}
+
+type respostaDeCategoria2 struct {
+	CategoriaID int16  `json:"categoria_id"`
+	Nome        string `json:"nome"`
+	Total       int64  `json:"total_centavos"`
+	Quantidade  int    `json:"quantidade"`
+}
+
+type respostaDeSinal struct {
+	Tipo        string `json:"tipo"`
+	CategoriaID int16  `json:"categoria_id"`
+	Nome        string `json:"nome"`
+	Contraparte string `json:"contraparte,omitempty"`
+	Valor       int64  `json:"valor_centavos"`
+	Severidade  int    `json:"severidade"`
+	Detalhe     string `json:"detalhe"`
+}
+
+// relatorio usa r.PathValue: o padrao "{competencia}" do ServeMux 1.22
+// extrai o segmento sem biblioteca de rotas.
+func (s *servidor) relatorio(w http.ResponseWriter, r *http.Request) {
+	alvo, err := competencia.Analisar(r.PathValue("competencia"))
+	if err != nil {
+		s.responderErro(w, r, err)
+		return
+	}
+
+	pronto, err := s.relatorios.Gerar(r.Context(), alvo)
+	if err != nil {
+		s.responderErro(w, r, err)
+		return
+	}
+
+	rel := pronto.Relatorio
+	resp := respostaDeRelatorio{
+		Competencia:       rel.Competencia.String(),
+		TotalSaidas:       int64(rel.TotalSaidas),
+		TotalEntradas:     int64(rel.TotalEntradas),
+		Saldo:             int64(rel.Saldo),
+		SaidasMesAnterior: int64(rel.SaidasMesAnterior),
+		PorCategoria:      make([]respostaDeCategoria2, 0, len(rel.PorCategoria)),
+		Sinais:            make([]respostaDeSinal, 0, len(rel.Sinais)),
+		Texto:             pronto.Texto,
+	}
+	for _, c := range rel.PorCategoria {
+		resp.PorCategoria = append(resp.PorCategoria, respostaDeCategoria2{
+			CategoriaID: int16(c.Categoria), Nome: pronto.Nomes[c.Categoria],
+			Total: int64(c.Total), Quantidade: c.Quantidade,
+		})
+	}
+	for _, sn := range rel.Sinais {
+		resp.Sinais = append(resp.Sinais, respostaDeSinal{
+			Tipo: string(sn.Tipo), CategoriaID: int16(sn.Categoria), Nome: pronto.Nomes[sn.Categoria],
+			Contraparte: sn.Contraparte, Valor: int64(sn.Valor), Severidade: sn.Severidade, Detalhe: sn.Detalhe,
+		})
+	}
+	responderJSON(w, http.StatusOK, resp)
 }
 
 // exigirBearer compara o token em tempo constante. Os hashes igualam o

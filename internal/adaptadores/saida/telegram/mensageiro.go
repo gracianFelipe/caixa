@@ -62,8 +62,7 @@ func (m *Mensageiro) PerguntarConciliacao(ctx context.Context, chatID int64, per
 }
 
 func (m *Mensageiro) EnviarAviso(ctx context.Context, chatID int64, texto string) error {
-	_, err := m.cliente.EnviarPergunta(ctx, chatID, texto, nil)
-	return err
+	return m.cliente.EnviarTexto(ctx, chatID, texto)
 }
 
 // Formato dos callbacks (limite de 64 bytes do Telegram):

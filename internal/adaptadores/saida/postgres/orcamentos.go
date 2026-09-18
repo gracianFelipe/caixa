@@ -68,6 +68,38 @@ func (r *Orcamentos) LimiteVigente(ctx context.Context, cat categoria.ID, comp c
 	return dinheiro.Centavos(limite), true, nil
 }
 
+// Vigentes resolve todas as categorias de uma vez. DISTINCT ON com o mesmo
+// ORDER BY de LimiteVigente: uma linha por categoria, a mais especifica.
+func (r *Orcamentos) Vigentes(ctx context.Context, comp competencia.Competencia) (map[categoria.ID]dinheiro.Centavos, error) {
+	rows, err := r.pool.Query(ctx,
+		`SELECT DISTINCT ON (categoria_id) categoria_id, limite_centavos
+		 FROM orcamentos
+		 WHERE competencia = $1 OR competencia IS NULL
+		 ORDER BY categoria_id, competencia NULLS LAST`,
+		comp.PrimeiroDia(),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("consultando orcamentos vigentes: %w", err)
+	}
+	defer rows.Close()
+
+	limites := map[categoria.ID]dinheiro.Centavos{}
+	for rows.Next() {
+		var (
+			cat    int16
+			limite int64
+		)
+		if err := rows.Scan(&cat, &limite); err != nil {
+			return nil, fmt.Errorf("lendo orcamento vigente: %w", err)
+		}
+		limites[categoria.ID(cat)] = dinheiro.Centavos(limite)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("lendo orcamentos vigentes: %w", err)
+	}
+	return limites, nil
+}
+
 type Alertas struct {
 	pool *pgxpool.Pool
 }

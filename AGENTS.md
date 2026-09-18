@@ -177,7 +177,8 @@ Fica na raiz: `internal/aplicacao` (casos de uso + `portas.go`),
 `internal/adaptadores/{entrada/web, entrada/extrato, saida/postgres, saida/relogio, saida/telegram}`
 (`extrato` é o tokenizador OFX próprio — SGML, Windows-1252, dinheiro sem
 float; heurística de meio ajustável com dados reais),
-`cmd/api`, `cmd/worker` (outbox + long polling do Telegram), `cmd/caixactl`
+`cmd/api`, `cmd/worker` (outbox, long polling do Telegram, agendador do
+relatório mensal), `cmd/caixactl`
 (subcomandos por `flag.NewFlagSet`: `migrar`, `importar`, `orcamento`),
 `migracoes/` (SQLs + pacote `migracoes` com `go:embed`; migrador próprio em
 `saida/postgres/migrador.go` — decisão na spec 002, sem goose), `deploy/`,

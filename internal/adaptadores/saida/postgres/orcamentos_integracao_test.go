@@ -47,6 +47,61 @@ func TestOrcamentoLimiteVigente(t *testing.T) {
 	if limite, _, _ := orcamentos.LimiteVigente(ctx, cat, outroMes); limite != 60000 {
 		t.Errorf("padrao redefinido = %d, queria 60000", limite)
 	}
+
+	// Vigentes segue a mesma precedencia, para todas as categorias de uma vez.
+	vigentes, err := orcamentos.Vigentes(ctx, mes)
+	if err != nil {
+		t.Fatalf("Vigentes: %v", err)
+	}
+	if vigentes[cat] != 80000 {
+		t.Errorf("Vigentes(%s)[%d] = %d, queria o especifico 80000", mes, cat, vigentes[cat])
+	}
+	vigentes, _ = orcamentos.Vigentes(ctx, outroMes)
+	if vigentes[cat] != 60000 {
+		t.Errorf("Vigentes(%s)[%d] = %d, queria o padrao 60000", outroMes, cat, vigentes[cat])
+	}
+}
+
+func TestDaJanelaSoConfirmados(t *testing.T) {
+	repo := repositorioDeTeste(t)
+	ocorrencias := NovoRepositorioDeOcorrencias(repo.pool)
+	ctx := context.Background()
+	marcador := time.Now().Format("150405.000000")
+
+	_, confirmado := evidencia(t, ocorrencias, "janela conf "+marcador, "JAN-C-"+marcador)
+	oC, _ := evidencia(t, ocorrencias, "janela conf2 "+marcador, "JAN-C2-"+marcador)
+	if _, err := ocorrencias.CriarComLancamento(ctx, oC, confirmado, eventoDeImportacao(t, ocorrencias, confirmado)); err != nil {
+		t.Fatal(err)
+	}
+	oP, provisorio := evidencia(t, ocorrencias, "janela prov "+marcador, "JAN-P-"+marcador)
+	provisorio = provisorio.Provisorio()
+	if _, err := ocorrencias.CriarComLancamento(ctx, oP, provisorio, eventoDeImportacao(t, ocorrencias, provisorio)); err != nil {
+		t.Fatal(err)
+	}
+
+	// evidencia() cria em julho/1998; janela de jan..jul/1998.
+	inicio, _ := competencia.Nova(1998, time.January)
+	fim, _ := competencia.Nova(1998, time.July)
+	ls, err := repo.DaJanela(ctx, inicio, fim)
+	if err != nil {
+		t.Fatalf("DaJanela: %v", err)
+	}
+
+	achouConfirmado, achouProvisorio := false, false
+	for _, l := range ls {
+		if l.ID == confirmado.ID {
+			achouConfirmado = true
+		}
+		if l.ID == provisorio.ID {
+			achouProvisorio = true
+		}
+	}
+	if !achouConfirmado {
+		t.Error("confirmado dentro da janela nao veio")
+	}
+	if achouProvisorio {
+		t.Error("provisorio nao pode entrar na janela do relatorio")
+	}
 }
 
 func TestAlertaRegistrarSeNovo(t *testing.T) {

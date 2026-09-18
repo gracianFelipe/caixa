@@ -42,6 +42,9 @@ type RepositorioDeLancamentos interface {
 	// marca o provisorio como descartado, numa transacao.
 	FundirProvisorio(ctx context.Context, provisorioID, destinoID identidade.ID) error
 	ConfirmarProvisorio(ctx context.Context, id identidade.ID) error
+	// DaJanela devolve os lancamentos CONFIRMADOS de inicio..fim (inclusivo),
+	// em ordem cronologica — a materia-prima do relatorio.
+	DaJanela(ctx context.Context, inicio, fim competencia.Competencia) ([]lancamento.Lancamento, error)
 }
 
 // RepositorioDeOcorrencias grava evidencia, fato e evento na mesma transacao.
@@ -84,6 +87,9 @@ type Mensageiro interface {
 type RepositorioDeOrcamentos interface {
 	Definir(ctx context.Context, o orcamento.Orcamento) error
 	LimiteVigente(ctx context.Context, cat categoria.ID, comp competencia.Competencia) (dinheiro.Centavos, bool, error)
+	// Vigentes resolve o limite de TODAS as categorias para o mes, com a
+	// mesma precedencia (especifico vence padrao).
+	Vigentes(ctx context.Context, comp competencia.Competencia) (map[categoria.ID]dinheiro.Centavos, error)
 }
 
 // RepositorioDeAlertas registra emissoes. RegistrarSeNovo devolve false se o

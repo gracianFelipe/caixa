@@ -55,6 +55,7 @@ type Mensagem struct {
 type Atualizacao struct {
 	ID         int64 // update_id, vira offset da proxima chamada
 	ChatID     int64
+	Texto      string // message.text; comandos como /relatorio chegam aqui
 	Callback   string // callback_query.data; vazio quando nao e clique de botao
 	CallbackID string
 	MensagemID int64
@@ -79,6 +80,14 @@ func (c *Cliente) EnviarPergunta(ctx context.Context, chatID int64, texto string
 		"reply_markup": map[string]any{"inline_keyboard": linhas},
 	}, &resposta)
 	return resposta.Resultado, err
+}
+
+// EnviarTexto manda uma mensagem simples, sem teclado.
+func (c *Cliente) EnviarTexto(ctx context.Context, chatID int64, texto string) error {
+	return c.chamar(ctx, "sendMessage", map[string]any{
+		"chat_id": chatID,
+		"text":    texto,
+	}, nil)
 }
 
 // EditarMensagem troca o texto e remove o teclado (pergunta respondida).
@@ -115,7 +124,8 @@ func (c *Cliente) BuscarAtualizacoes(ctx context.Context, offset int64, timeoutS
 				} `json:"message"`
 			} `json:"callback_query"`
 			Mensagem *struct {
-				Chat struct {
+				Texto string `json:"text"`
+				Chat  struct {
 					ID int64 `json:"id"`
 				} `json:"chat"`
 			} `json:"message"`
@@ -142,6 +152,7 @@ func (c *Cliente) BuscarAtualizacoes(ctx context.Context, offset int64, timeoutS
 			a.MensagemID = r.Callback.Mensagem.ID
 		case r.Mensagem != nil:
 			a.ChatID = r.Mensagem.Chat.ID
+			a.Texto = r.Mensagem.Texto
 		}
 		atualizacoes = append(atualizacoes, a)
 	}

@@ -13,10 +13,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gracianFelipe/caixa/internal/aplicacao"
 	"github.com/gracianFelipe/caixa/internal/dominio/categoria"
 	"github.com/gracianFelipe/caixa/internal/dominio/competencia"
 	"github.com/gracianFelipe/caixa/internal/dominio/identidade"
 	"github.com/gracianFelipe/caixa/internal/dominio/lancamento"
+	"github.com/gracianFelipe/caixa/internal/dominio/relatorio"
 )
 
 var saoPaulo = time.FixedZone("America/Sao_Paulo", -3*60*60)
@@ -68,6 +70,16 @@ func (f catalogoFalso) Categorias(context.Context) ([]categoria.Categoria, error
 	return f.categorias, f.erro
 }
 
+// relatoriosFalso devolve um relatorio programado ou erro.
+type relatoriosFalso struct {
+	pronto aplicacao.RelatorioPronto
+	erro   error
+}
+
+func (f relatoriosFalso) Gerar(context.Context, competencia.Competencia) (aplicacao.RelatorioPronto, error) {
+	return f.pronto, f.erro
+}
+
 func logSilencioso() *slog.Logger {
 	return slog.New(slog.NewTextHandler(io.Discard, nil))
 }
@@ -98,7 +110,7 @@ func TestRegistrar(t *testing.T) {
 	for _, c := range casos {
 		t.Run(c.nome, func(t *testing.T) {
 			servico := &servicoFalso{erro: c.erro}
-			h := NovoHandler(servico, catalogoFalso{}, "", logSilencioso())
+			h := NovoHandler(Servicos{Lancamentos: servico, Catalogo: catalogoFalso{}, Relatorios: relatoriosFalso{}, AtalhoToken: ""}, logSilencioso())
 
 			req := httptest.NewRequest(http.MethodPost, "/lancamentos", strings.NewReader(c.corpo))
 			rec := httptest.NewRecorder()
@@ -119,7 +131,7 @@ func TestRegistrar(t *testing.T) {
 
 func TestRegistrarRespostaCompleta(t *testing.T) {
 	servico := &servicoFalso{}
-	h := NovoHandler(servico, catalogoFalso{}, "", logSilencioso())
+	h := NovoHandler(Servicos{Lancamentos: servico, Catalogo: catalogoFalso{}, Relatorios: relatoriosFalso{}, AtalhoToken: ""}, logSilencioso())
 
 	req := httptest.NewRequest(http.MethodPost, "/lancamentos", strings.NewReader(corpoValido))
 	rec := httptest.NewRecorder()
@@ -171,7 +183,7 @@ func TestListar(t *testing.T) {
 
 	for _, c := range casos {
 		t.Run(c.nome, func(t *testing.T) {
-			h := NovoHandler(c.servico, catalogoFalso{}, "", logSilencioso())
+			h := NovoHandler(Servicos{Lancamentos: c.servico, Catalogo: catalogoFalso{}, Relatorios: relatoriosFalso{}, AtalhoToken: ""}, logSilencioso())
 
 			req := httptest.NewRequest(http.MethodGet, "/lancamentos"+c.consulta, nil)
 			rec := httptest.NewRecorder()
@@ -188,7 +200,7 @@ func TestListar(t *testing.T) {
 }
 
 func TestRotas(t *testing.T) {
-	h := NovoHandler(&servicoFalso{}, catalogoFalso{}, "", logSilencioso())
+	h := NovoHandler(Servicos{Lancamentos: &servicoFalso{}, Catalogo: catalogoFalso{}, Relatorios: relatoriosFalso{}, AtalhoToken: ""}, logSilencioso())
 
 	casos := []struct {
 		metodo string
@@ -217,7 +229,7 @@ func TestRotas(t *testing.T) {
 func TestLogNaoVazaPII(t *testing.T) {
 	var saida bytes.Buffer
 	log := slog.New(slog.NewJSONHandler(&saida, nil))
-	h := NovoHandler(&servicoFalso{erro: errors.New("banco caiu")}, catalogoFalso{}, "", log)
+	h := NovoHandler(Servicos{Lancamentos: &servicoFalso{erro: errors.New("banco caiu")}, Catalogo: catalogoFalso{}, Relatorios: relatoriosFalso{}, AtalhoToken: ""}, log)
 
 	corpo := `{"valor_centavos":-987654,"meio":"pix","contraparte":"CLINICA SIGILOSA","ocorrido_em":"2026-09-17T15:00:00Z"}`
 	rec := httptest.NewRecorder()
@@ -239,7 +251,7 @@ func TestLogNaoVazaPII(t *testing.T) {
 func TestCategorias(t *testing.T) {
 	t.Run("lista", func(t *testing.T) {
 		mercado, _ := categoria.Nova(1, "mercado")
-		h := NovoHandler(&servicoFalso{}, catalogoFalso{categorias: []categoria.Categoria{mercado}}, "", logSilencioso())
+		h := NovoHandler(Servicos{Lancamentos: &servicoFalso{}, Catalogo: catalogoFalso{categorias: []categoria.Categoria{mercado}}, Relatorios: relatoriosFalso{}, AtalhoToken: ""}, logSilencioso())
 
 		rec := httptest.NewRecorder()
 		h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/categorias", nil))
@@ -253,7 +265,7 @@ func TestCategorias(t *testing.T) {
 	})
 
 	t.Run("vazia devolve lista, nao null", func(t *testing.T) {
-		h := NovoHandler(&servicoFalso{}, catalogoFalso{}, "", logSilencioso())
+		h := NovoHandler(Servicos{Lancamentos: &servicoFalso{}, Catalogo: catalogoFalso{}, Relatorios: relatoriosFalso{}, AtalhoToken: ""}, logSilencioso())
 		rec := httptest.NewRecorder()
 		h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/categorias", nil))
 		if !strings.HasPrefix(rec.Body.String(), "[]") {
@@ -262,7 +274,7 @@ func TestCategorias(t *testing.T) {
 	})
 
 	t.Run("erro vira 500 generico", func(t *testing.T) {
-		h := NovoHandler(&servicoFalso{}, catalogoFalso{erro: errors.New("sem banco")}, "", logSilencioso())
+		h := NovoHandler(Servicos{Lancamentos: &servicoFalso{}, Catalogo: catalogoFalso{erro: errors.New("sem banco")}, Relatorios: relatoriosFalso{}, AtalhoToken: ""}, logSilencioso())
 		rec := httptest.NewRecorder()
 		h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/categorias", nil))
 		if rec.Code != http.StatusInternalServerError || strings.Contains(rec.Body.String(), "sem banco") {
@@ -277,7 +289,7 @@ func TestAtalho(t *testing.T) {
 
 	requisicao := func(auth string) *httptest.ResponseRecorder {
 		servico := &servicoFalso{}
-		h := NovoHandler(servico, catalogoFalso{}, token, logSilencioso())
+		h := NovoHandler(Servicos{Lancamentos: servico, Catalogo: catalogoFalso{}, Relatorios: relatoriosFalso{}, AtalhoToken: token}, logSilencioso())
 		req := httptest.NewRequest(http.MethodPost, "/atalho/lancamentos", strings.NewReader(corpo))
 		if auth != "" {
 			req.Header.Set("Authorization", auth)
@@ -310,7 +322,7 @@ func TestAtalho(t *testing.T) {
 	})
 	t.Run("valor invalido e 400", func(t *testing.T) {
 		servico := &servicoFalso{}
-		h := NovoHandler(servico, catalogoFalso{}, token, logSilencioso())
+		h := NovoHandler(Servicos{Lancamentos: servico, Catalogo: catalogoFalso{}, Relatorios: relatoriosFalso{}, AtalhoToken: token}, logSilencioso())
 		req := httptest.NewRequest(http.MethodPost, "/atalho/lancamentos", strings.NewReader(`{"valor":"abc","contraparte":"X","meio":""}`))
 		req.Header.Set("Authorization", "Bearer "+token)
 		rec := httptest.NewRecorder()
@@ -321,7 +333,7 @@ func TestAtalho(t *testing.T) {
 		}
 	})
 	t.Run("rota inexiste sem token configurado", func(t *testing.T) {
-		h := NovoHandler(&servicoFalso{}, catalogoFalso{}, "", logSilencioso())
+		h := NovoHandler(Servicos{Lancamentos: &servicoFalso{}, Catalogo: catalogoFalso{}, Relatorios: relatoriosFalso{}, AtalhoToken: ""}, logSilencioso())
 		req := httptest.NewRequest(http.MethodPost, "/atalho/lancamentos", strings.NewReader(corpo))
 		req.Header.Set("Authorization", "Bearer qualquer")
 		rec := httptest.NewRecorder()
@@ -330,4 +342,51 @@ func TestAtalho(t *testing.T) {
 			t.Errorf("status = %d, queria 404", rec.Code)
 		}
 	})
+}
+
+func TestRelatorio(t *testing.T) {
+	setembro, _ := competencia.Nova(2026, time.September)
+	mercado, _ := categoria.Nova(1, "mercado")
+	pronto := aplicacao.RelatorioPronto{
+		Relatorio: relatorio.Relatorio{
+			Competencia: setembro, TotalSaidas: 90000, TotalEntradas: 500000, Saldo: 410000,
+			PorCategoria: []relatorio.ResumoDeCategoria{{Categoria: 1, Total: 90000, Quantidade: 1}},
+			Sinais:       []relatorio.Sinal{{Tipo: relatorio.SinalEstouro, Categoria: 1, Valor: 90000, Severidade: 112, Detalhe: "passou"}},
+		},
+		Nomes: map[categoria.ID]string{mercado.ID: mercado.Nome},
+		Texto: "Relatorio 2026-09 ...",
+	}
+
+	casos := []struct {
+		nome    string
+		rota    string
+		servico relatoriosFalso
+		status  int
+		contem  string
+	}{
+		{"ok", "/relatorio/2026-09", relatoriosFalso{pronto: pronto}, http.StatusOK, `"total_saidas_centavos":90000`},
+		{"nomes resolvidos", "/relatorio/2026-09", relatoriosFalso{pronto: pronto}, http.StatusOK, `"nome":"mercado"`},
+		{"sinal com severidade", "/relatorio/2026-09", relatoriosFalso{pronto: pronto}, http.StatusOK, `"severidade":112`},
+		{"competencia invalida", "/relatorio/2026-13", relatoriosFalso{}, http.StatusBadRequest, `"erro"`},
+		{"competencia com dia", "/relatorio/2026-09-01", relatoriosFalso{}, http.StatusBadRequest, `"erro"`},
+		{"erro interno generico", "/relatorio/2026-09", relatoriosFalso{erro: errors.New("banco caiu")}, http.StatusInternalServerError, `"erro interno"`},
+	}
+
+	for _, c := range casos {
+		t.Run(c.nome, func(t *testing.T) {
+			h := NovoHandler(Servicos{Lancamentos: &servicoFalso{}, Catalogo: catalogoFalso{}, Relatorios: c.servico}, logSilencioso())
+			rec := httptest.NewRecorder()
+			h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, c.rota, nil))
+
+			if rec.Code != c.status {
+				t.Fatalf("status = %d, queria %d; corpo %s", rec.Code, c.status, rec.Body)
+			}
+			if !strings.Contains(rec.Body.String(), c.contem) {
+				t.Errorf("corpo %s nao contem %s", rec.Body, c.contem)
+			}
+			if c.status == http.StatusInternalServerError && strings.Contains(rec.Body.String(), "banco caiu") {
+				t.Error("detalhe interno vazou")
+			}
+		})
+	}
 }

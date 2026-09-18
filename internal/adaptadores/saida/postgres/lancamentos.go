@@ -110,6 +110,23 @@ func (r *Repositorio) AtribuirCategoria(ctx context.Context, id identidade.ID, c
 	return nil
 }
 
+const sqlDaJanela = `
+SELECT id, ocorrido_em, competencia, valor_centavos, meio, contraparte, contraparte_norm, categoria_id, categoria_origem, situacao
+FROM lancamentos
+WHERE competencia BETWEEN $1 AND $2 AND situacao = 'confirmado'
+ORDER BY ocorrido_em, id`
+
+// DaJanela carrega a materia-prima do relatorio: so confirmados, do inicio
+// ao fim (inclusivo). Provisorio e descartado nao entram em nenhuma conta.
+func (r *Repositorio) DaJanela(ctx context.Context, inicio, fim competencia.Competencia) ([]lancamento.Lancamento, error) {
+	rows, err := r.pool.Query(ctx, sqlDaJanela, inicio.PrimeiroDia(), fim.PrimeiroDia())
+	if err != nil {
+		return nil, fmt.Errorf("consultando janela: %w", err)
+	}
+	defer rows.Close()
+	return pgx.CollectRows(rows, lerLancamento)
+}
+
 // GastoConfirmado soma so saidas confirmadas: provisorio e descartado ficam
 // fora, e entrada (valor positivo) nao e gasto. Devolve magnitude positiva.
 func (r *Repositorio) GastoConfirmado(ctx context.Context, cat categoria.ID, comp competencia.Competencia) (dinheiro.Centavos, error) {

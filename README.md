@@ -12,7 +12,7 @@ numa entrevista técnica. Os contratos que o código obedece estão em
 
 ## Estado
 
-**Fase 2 concluída.** Concluído até aqui (specs em [`.specs/archive/`](.specs/archive/)):
+**Fases 1-5 concluídas — marco "pronto para entrevista".** Concluído até aqui (specs em [`.specs/archive/`](.specs/archive/)):
 
 * **001** — espinha vertical: lançamento entra por HTTP, atravessa domínio e
   aplicação, grava no Postgres, volta por competência.
@@ -49,8 +49,14 @@ numa entrevista técnica. Os contratos que o código obedece estão em
   o teclado "mesmo gasto / gasto novo" que resolve o provisório — o callback
   carrega o id da pergunta porque dois UUIDs estouram os 64 bytes do Telegram.
 
-Próximo: relatório com cinco detectores (Fase 5), PWA embutido (6), IMAP (7),
-deploy (8).
+* **009 (Fase 5)** — relatório mensal com cinco detectores determinísticos
+  (repetição, assinatura esquecida, escalada, estouro, gasto atípico por
+  mediana+MAD — não média+desvio, porque o próprio outlier contamina a média),
+  congelado em golden files; `GET /relatorio/{competencia}`, `/relatorio` no
+  Telegram e agendador do dia 1 às 08:00 com idempotência pela tabela de
+  alertas (restart não duplica nem pula).
+
+Próximo: PWA embutido (Fase 6), IMAP (7), deploy (8).
 
 ## Arquitetura em uma frase
 
@@ -102,6 +108,7 @@ Endpoints:
 | `GET` | `/lancamentos?competencia=AAAA-MM` | lista o mês |
 | `GET` | `/categorias` | vocabulário fixo de categorias |
 | `POST` | `/atalho/lancamentos` | captura rápida (Atalho do iOS); exige `Authorization: Bearer` de `CAIXA_ATALHO_TOKEN` |
+| `GET` | `/relatorio/AAAA-MM` | relatório do mês: totais, por categoria, cinco detectores, texto pronto |
 
 ```powershell
 # no PowerShell, mande JSON por arquivo: aspas escapadas na linha de comando quebram

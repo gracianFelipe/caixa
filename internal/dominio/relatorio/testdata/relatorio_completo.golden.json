@@ -1,0 +1,100 @@
+{
+  "Competencia": {},
+  "TotalSaidas": 393990,
+  "TotalEntradas": 500000,
+  "Saldo": 106010,
+  "SaidasMesAnterior": 108990,
+  "PorCategoria": [
+    {
+      "Categoria": 7,
+      "Total": 250000,
+      "Quantidade": 1
+    },
+    {
+      "Categoria": 1,
+      "Total": 90000,
+      "Quantidade": 1
+    },
+    {
+      "Categoria": 3,
+      "Total": 32000,
+      "Quantidade": 1
+    },
+    {
+      "Categoria": 2,
+      "Total": 18000,
+      "Quantidade": 9
+    },
+    {
+      "Categoria": 8,
+      "Total": 3990,
+      "Quantidade": 1
+    }
+  ],
+  "Sinais": [
+    {
+      "Tipo": "vazamento_por_repeticao",
+      "Categoria": 2,
+      "Contraparte": "",
+      "Valor": 18000,
+      "Severidade": 9,
+      "Detalhe": "muitos gastos pequenos somam alto"
+    },
+    {
+      "Tipo": "assinatura_esquecida",
+      "Categoria": 8,
+      "Contraparte": "STREAMING X",
+      "Valor": 3990,
+      "Severidade": 4,
+      "Detalhe": "cobranca recorrente ha meses; ainda usa?"
+    },
+    {
+      "Tipo": "categoria_em_escalada",
+      "Categoria": 1,
+      "Contraparte": "",
+      "Valor": 90000,
+      "Severidade": 900,
+      "Detalhe": "gasto cresce ha meses seguidos"
+    },
+    {
+      "Tipo": "categoria_em_escalada",
+      "Categoria": 3,
+      "Contraparte": "",
+      "Valor": 32000,
+      "Severidade": 60,
+      "Detalhe": "gasto cresce ha meses seguidos"
+    },
+    {
+      "Tipo": "estouro_de_orcamento",
+      "Categoria": 1,
+      "Contraparte": "",
+      "Valor": 90000,
+      "Severidade": 112,
+      "Detalhe": "passou do limite definido"
+    },
+    {
+      "Tipo": "gasto_atipico",
+      "Categoria": 7,
+      "Contraparte": "ELETRO LOJA",
+      "Valor": 250000,
+      "Severidade": 5555,
+      "Detalhe": "muito acima do seu padrao dos ultimos meses"
+    },
+    {
+      "Tipo": "gasto_atipico",
+      "Categoria": 1,
+      "Contraparte": "SUPERMERCADO",
+      "Valor": 90000,
+      "Severidade": 2000,
+      "Detalhe": "muito acima do seu padrao dos ultimos meses"
+    },
+    {
+      "Tipo": "gasto_atipico",
+      "Categoria": 3,
+      "Contraparte": "POSTO",
+      "Valor": 32000,
+      "Severidade": 711,
+      "Detalhe": "muito acima do seu padrao dos ultimos meses"
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+Relatorio 2026-09
+saidas: R$ 3.939,90 (R$ 1.089,90 no mes anterior)
+entradas: R$ 5.000,00
+saldo: R$ 1.060,10
+
+por categoria:
+  lazer: R$ 2.500,00 (1)
+  mercado: R$ 900,00 (1)
+  transporte: R$ 320,00 (1)
+  restaurante: R$ 180,00 (9)
+  assinatura: R$ 39,90 (1)
+
+sinais:
+  • restaurante: 9 gastos pequenos somam R$ 180,00
+  • STREAMING X cobra R$ 39,90 ha 4 meses — ainda usa?
+  • mercado subiu 900% em meses seguidos (agora R$ 900,00)
+  • transporte subiu 60% em meses seguidos (agora R$ 320,00)
+  • mercado em 112% do limite (R$ 900,00)
+  • ELETRO LOJA fora do padrao: R$ 2.500,00
+  • SUPERMERCADO fora do padrao: R$ 900,00
+  • POSTO fora do padrao: R$ 320,00

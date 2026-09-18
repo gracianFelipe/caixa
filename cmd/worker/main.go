@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -19,6 +20,7 @@ import (
 	"github.com/gracianFelipe/caixa/internal/adaptadores/saida/relogio"
 	"github.com/gracianFelipe/caixa/internal/adaptadores/saida/telegram"
 	"github.com/gracianFelipe/caixa/internal/aplicacao"
+	"github.com/gracianFelipe/caixa/internal/dominio/competencia"
 )
 
 func main() {
@@ -83,25 +85,89 @@ func executar(ctx context.Context, log *slog.Logger) error {
 		ChatID:      cfg.chatID,
 	})
 
+	fuso, err := time.LoadLocation("America/Sao_Paulo")
+	if err != nil {
+		return fmt.Errorf("carregando fuso: %w", err)
+	}
+	relatorios := aplicacao.NovoServicoDeRelatorios(
+		postgres.NovoRepositorio(pool),
+		postgres.NovoRepositorioDeOrcamentos(pool),
+		postgres.NovoRepositorioDeCategorias(pool),
+	)
+	agendador := &agendador{
+		relatorios: relatorios,
+		alertas:    postgres.NovoRepositorioDeAlertas(pool),
+		cliente:    cliente,
+		fuso:       fuso,
+		chatID:     cfg.chatID,
+	}
+
 	ctxSinal, pararSinal := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	defer pararSinal()
 
 	log.Info("worker de pe", "chat", cfg.chatID)
 
 	var espera sync.WaitGroup
-	espera.Add(2)
+	espera.Add(3)
 	go func() {
 		defer espera.Done()
 		lacoDoOutbox(ctxSinal, fila, log)
 	}()
 	go func() {
 		defer espera.Done()
-		lacoDeAtualizacoes(ctxSinal, cliente, fila, cfg.chatID, log)
+		lacoDeAtualizacoes(ctxSinal, cliente, fila, relatorios, cfg.chatID, log)
+	}()
+	go func() {
+		defer espera.Done()
+		agendador.laco(ctxSinal, log)
 	}()
 	espera.Wait()
 
 	log.Info("worker encerrado")
 	return nil
+}
+
+// agendador manda o relatorio do mes fechado no dia 1 as 08:00 (Sao Paulo).
+// Sem cron: um tique por minuto pergunta "ja passou da hora?" e a tabela de
+// alertas e a "ultima execucao persistida" — restart nao duplica nem pula.
+type agendador struct {
+	relatorios *aplicacao.Relatorios
+	alertas    *postgres.Alertas
+	cliente    *telegram.Cliente
+	fuso       *time.Location
+	chatID     int64
+}
+
+func (a *agendador) laco(ctx context.Context, log *slog.Logger) {
+	tique := time.NewTicker(time.Minute)
+	defer tique.Stop()
+
+	for {
+		if err := a.tentar(ctx); err != nil && !errors.Is(err, context.Canceled) {
+			log.Error("relatorio agendado", "erro", err)
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-tique.C:
+		}
+	}
+}
+
+func (a *agendador) tentar(ctx context.Context) error {
+	alvo, deve := aplicacao.CompetenciaAgendada(time.Now().In(a.fuso))
+	if !deve {
+		return nil
+	}
+	novo, err := a.alertas.RegistrarSeNovo(ctx, "relatorio", alvo.String())
+	if err != nil || !novo {
+		return err
+	}
+	pronto, err := a.relatorios.Gerar(ctx, alvo)
+	if err != nil {
+		return err
+	}
+	return a.cliente.EnviarTexto(ctx, a.chatID, pronto.Texto)
 }
 
 // lacoDoOutbox drena a fila a cada 2s. Erro nao derruba o worker: loga e
@@ -129,7 +195,7 @@ func lacoDoOutbox(ctx context.Context, fila *aplicacao.Fila, log *slog.Logger) {
 
 // lacoDeAtualizacoes faz long polling. So o chat do dono e atendido; o resto
 // e contado e descartado sem logar conteudo.
-func lacoDeAtualizacoes(ctx context.Context, cliente *telegram.Cliente, fila *aplicacao.Fila, chatID int64, log *slog.Logger) {
+func lacoDeAtualizacoes(ctx context.Context, cliente *telegram.Cliente, fila *aplicacao.Fila, relatorios *aplicacao.Relatorios, chatID int64, log *slog.Logger) {
 	var offset int64
 	for {
 		if ctx.Err() != nil {
@@ -158,13 +224,41 @@ func lacoDeAtualizacoes(ctx context.Context, cliente *telegram.Cliente, fila *ap
 				continue
 			}
 			if a.Callback == "" {
-				continue // texto livre nao tem uso ainda; /relatorio chega na Fase 5
+				if strings.HasPrefix(a.Texto, "/relatorio") {
+					if err := responderRelatorio(ctx, cliente, relatorios, a); err != nil {
+						log.Error("respondendo /relatorio", "erro", err)
+					}
+				}
+				continue
 			}
 			if err := responderCallback(ctx, cliente, fila, a); err != nil {
 				log.Error("respondendo callback", "erro", err)
 			}
 		}
 	}
+}
+
+// responderRelatorio atende "/relatorio" (mes atual) ou "/relatorio AAAA-MM".
+func responderRelatorio(ctx context.Context, cliente *telegram.Cliente, relatorios *aplicacao.Relatorios, a telegram.Atualizacao) error {
+	fuso, err := time.LoadLocation("America/Sao_Paulo")
+	if err != nil {
+		return err
+	}
+	agora := time.Now().In(fuso)
+	alvo, _ := competencia.Nova(agora.Year(), agora.Month())
+
+	if partes := strings.Fields(a.Texto); len(partes) > 1 {
+		if alvo, err = competencia.Analisar(partes[1]); err != nil {
+			return cliente.EnviarTexto(ctx, a.ChatID, "uso: /relatorio [AAAA-MM]")
+		}
+	}
+
+	pronto, err := relatorios.Gerar(ctx, alvo)
+	if err != nil {
+		_ = cliente.EnviarTexto(ctx, a.ChatID, "nao consegui gerar o relatorio agora")
+		return err
+	}
+	return cliente.EnviarTexto(ctx, a.ChatID, pronto.Texto)
 }
 
 func responderCallback(ctx context.Context, cliente *telegram.Cliente, fila *aplicacao.Fila, a telegram.Atualizacao) error {
