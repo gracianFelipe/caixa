@@ -33,10 +33,11 @@ cmd → adaptadores → aplicacao → dominio
 ```
 
 `internal/dominio/**` importa **só a stdlib**. Não é convenção, é asserção na
-CI:
+CI, usando o critério do próprio toolchain (`.Standard`) em vez de regex:
 
 ```bash
-go list -deps ./internal/dominio/... | grep -v '^github.com/gracianFelipe/caixa/' | grep -vE '^[a-z0-9_/]+$' && exit 1
+go list -deps -f '{{if not .Standard}}{{.ImportPath}}{{end}}' ./internal/dominio/... | grep -v '^github.com/gracianFelipe/caixa/'
+# saida vazia = conforme
 ```
 
 As interfaces moram em quem consome (`internal/aplicacao/portas.go`,

@@ -46,7 +46,8 @@ importar uns aos outros (`lancamento` importa `dinheiro`, `competencia`,
 
 ```bash
 go test ./internal/dominio/...
-go list -deps ./internal/dominio/... | grep -v '^github.com/gracianFelipe/caixa/' | grep -vE '^[a-z0-9_/]+$' && exit 1
+go list -deps -f '{{if not .Standard}}{{.ImportPath}}{{end}}' ./internal/dominio/... | grep -v '^github.com/gracianFelipe/caixa/'
+# saida vazia = conforme
 ```
 
 ## Child DOX Index

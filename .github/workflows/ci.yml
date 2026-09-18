@@ -53,10 +53,12 @@ jobs:
           go vet -tags=integracao ./...
 
       - name: regra de dependencia — dominio importa so a stdlib
+        # Criterio do proprio toolchain (.Standard), nao regex de caminho:
+        # a stdlib moderna tem caminhos com ponto e versao
+        # (crypto/internal/entropy/v1.0.0) que regex marcaria errado.
         run: |
-          fora=$(go list -deps ./internal/dominio/... \
-            | grep -v '^github.com/gracianFelipe/caixa/' \
-            | grep -vE '^[a-z0-9_/]+$' || true)
+          fora=$(go list -deps -f '{{if not .Standard}}{{.ImportPath}}{{end}}' ./internal/dominio/... \
+            | grep -v '^github.com/gracianFelipe/caixa/' || true)
           if [ -n "$fora" ]; then
             echo "internal/dominio importa fora da stdlib:"
             echo "$fora"

@@ -13,10 +13,11 @@ contratos invioláveis; o plano carrega o roteiro.
 1. **Regra de dependência.** `cmd → adaptadores → aplicacao → dominio`. Ninguém
    importa para dentro do domínio. `internal/dominio/...` importa **apenas a
    stdlib** — sem `pgx`, sem `net/http`, sem `time.Now()` implícito (o tempo
-   entra como parâmetro). Verificado na CI, excluindo o próprio módulo antes
-   de filtrar (senão os pacotes do domínio, que têm ponto e maiúscula no
-   caminho, seriam marcados):
-   `go list -deps ./internal/dominio/... | grep -v '^github.com/gracianFelipe/caixa/' | grep -vE '^[a-z0-9_/]+$' && exit 1`.
+   entra como parâmetro). Verificado na CI pelo critério do próprio toolchain
+   (`.Standard`), não por regex de caminho — a stdlib moderna tem caminhos
+   com ponto e versão (`crypto/internal/entropy/v1.0.0`):
+   `go list -deps -f '{{if not .Standard}}{{.ImportPath}}{{end}}' ./internal/dominio/... | grep -v '^github.com/gracianFelipe/caixa/'`
+   (saída vazia = conforme).
 2. **Interfaces moram no consumidor**, nunca em quem implementa. Portas de
    saída em `internal/aplicacao/portas.go`; a interface do serviço que um
    adaptador de entrada consome fica no próprio adaptador

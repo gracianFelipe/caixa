@@ -47,6 +47,24 @@ errado**, **como foi pego**, **o que entrou no lugar**.
 * **O que entrou no lugar:** `meio, err := AnalisarMeio(...)` e `Meio: meio`,
   mais `TestNovoNormalizaMeio` para o caso nunca voltar.
 
+## 003 — A correção da verificação de dependência também estava errada
+
+* **Onde:** a mesma verificação do caso 001 (`AGENTS.md`, CI, README, skills).
+* **O que a IA produziu:** a correção do caso 001 manteve a abordagem por
+  regex (`grep -vE '^[a-z0-9_/]+$'`), só excluindo o módulo antes.
+* **Por que estava errado:** a stdlib do Go moderno tem pacotes internos com
+  ponto e versão no caminho — `crypto/sha256` (usado pela `ocorrencia` para a
+  impressão) puxa `crypto/internal/entropy/v1.0.0`, que o regex marca como
+  "fora da stdlib". Classificar stdlib por formato de caminho é premissa
+  frágil: o formato mudou e a asserção quebrou.
+* **Como foi pego:** pela própria CI, no push da spec 003 — a asserção
+  executável fez exatamente o papel dela.
+* **O que entrou no lugar:** perguntar ao toolchain, que é quem define o que
+  é stdlib: `go list -deps -f '{{if not .Standard}}{{.ImportPath}}{{end}}'`,
+  restando ao grep só excluir o próprio módulo. Lição registrada: quando a
+  ferramenta expõe o critério (`.Standard`), usar o critério, não uma
+  aproximação textual dele.
+
 ## Decisões discutidas e mantidas (não são rejeições)
 
 Registradas para mostrar que houve decisão, não omissão.
