@@ -10,6 +10,8 @@ local.ps1
 *.qfx
 extratos/
 *.eml
+# Excecao consciente, arquivo a arquivo: so fixture 100% sintetica entra.
+!internal/adaptadores/entrada/extrato/testdata/sintetico_basico.ofx
 
 # Binarios compilados
 /caixa
