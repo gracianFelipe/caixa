@@ -16,11 +16,15 @@ import (
 	"github.com/gracianFelipe/caixa/internal/adaptadores/saida/postgres"
 	"github.com/gracianFelipe/caixa/internal/adaptadores/saida/relogio"
 	"github.com/gracianFelipe/caixa/internal/aplicacao"
+	"github.com/gracianFelipe/caixa/internal/dominio/categoria"
+	"github.com/gracianFelipe/caixa/internal/dominio/competencia"
+	"github.com/gracianFelipe/caixa/internal/dominio/dinheiro"
 	"github.com/gracianFelipe/caixa/internal/dominio/ocorrencia"
+	"github.com/gracianFelipe/caixa/internal/dominio/orcamento"
 	"github.com/gracianFelipe/caixa/migracoes"
 )
 
-const uso = "uso: caixactl <migrar | importar arquivo.ofx [outro.ofx ...]>"
+const uso = "uso: caixactl <migrar | importar arquivo.ofx [...] | orcamento -categoria N -limite \"R$ X\" [-competencia AAAA-MM]>"
 
 func main() {
 	// CLI: texto legivel em stderr; stdout fica livre para dados.
@@ -55,6 +59,15 @@ func executar(ctx context.Context, args []string, log *slog.Logger) error {
 			return errors.New(uso)
 		}
 		return importar(ctx, flags.Args(), log)
+	case "orcamento":
+		flags := flag.NewFlagSet("orcamento", flag.ContinueOnError)
+		categoriaID := flags.Int("categoria", 0, "id da categoria (ver GET /categorias)")
+		limite := flags.String("limite", "", "limite mensal em reais, ex.: \"R$ 800,00\"")
+		comp := flags.String("competencia", "", "AAAA-MM; vazio = limite padrao de todo mes")
+		if err := flags.Parse(args[1:]); err != nil {
+			return err
+		}
+		return definirOrcamento(ctx, *categoriaID, *limite, *comp, log)
 	default:
 		return fmt.Errorf("subcomando desconhecido: %q (%s)", args[0], uso)
 	}
@@ -86,6 +99,46 @@ func migrar(ctx context.Context, log *slog.Logger) error {
 	if len(aplicadas) == 0 {
 		log.Info("nada a aplicar: banco ja esta na ultima versao")
 	}
+	return nil
+}
+
+func definirOrcamento(ctx context.Context, categoriaID int, limiteTexto, compTexto string, log *slog.Logger) error {
+	url := os.Getenv("CAIXA_BD_URL")
+	if url == "" {
+		return errors.New("CAIXA_BD_URL nao definida")
+	}
+
+	limite, err := dinheiro.Analisar(limiteTexto)
+	if err != nil {
+		return fmt.Errorf("-limite: %w", err)
+	}
+	var comp competencia.Competencia
+	if compTexto != "" {
+		if comp, err = competencia.Analisar(compTexto); err != nil {
+			return fmt.Errorf("-competencia: %w", err)
+		}
+	}
+	o, err := orcamento.Novo(categoria.ID(categoriaID), comp, limite)
+	if err != nil {
+		return err
+	}
+
+	ctx, cancelar := context.WithTimeout(ctx, 30*time.Second)
+	defer cancelar()
+	pool, err := postgres.Conectar(ctx, url)
+	if err != nil {
+		return err
+	}
+	defer pool.Close()
+
+	if err := postgres.NovoRepositorioDeOrcamentos(pool).Definir(ctx, o); err != nil {
+		return err
+	}
+	alcance := "padrao (todo mes)"
+	if !comp.EhZero() {
+		alcance = comp.String()
+	}
+	log.Info("orcamento definido", "categoria", categoriaID, "limite", limite.String(), "alcance", alcance)
 	return nil
 }
 

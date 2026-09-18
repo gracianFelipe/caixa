@@ -110,6 +110,60 @@ func (r *Repositorio) AtribuirCategoria(ctx context.Context, id identidade.ID, c
 	return nil
 }
 
+// GastoConfirmado soma so saidas confirmadas: provisorio e descartado ficam
+// fora, e entrada (valor positivo) nao e gasto. Devolve magnitude positiva.
+func (r *Repositorio) GastoConfirmado(ctx context.Context, cat categoria.ID, comp competencia.Competencia) (dinheiro.Centavos, error) {
+	var soma int64
+	err := r.pool.QueryRow(ctx,
+		`SELECT COALESCE(-SUM(valor_centavos), 0)
+		 FROM lancamentos
+		 WHERE categoria_id = $1 AND competencia = $2
+		   AND situacao = 'confirmado' AND valor_centavos < 0`,
+		int16(cat), comp.PrimeiroDia(),
+	).Scan(&soma)
+	if err != nil {
+		return 0, fmt.Errorf("somando gasto: %w", err)
+	}
+	return dinheiro.Centavos(soma), nil
+}
+
+// FundirProvisorio e o "mesmo gasto": as evidencias migram para o destino
+// com resultado conciliou e o provisorio vira descartado — tudo ou nada.
+func (r *Repositorio) FundirProvisorio(ctx context.Context, provisorioID, destinoID identidade.ID) error {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("abrindo transacao: %w", err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+
+	if _, err := tx.Exec(ctx,
+		`UPDATE ocorrencias SET lancamento_id = $1, resultado = 'conciliou' WHERE lancamento_id = $2`,
+		destinoID, provisorioID,
+	); err != nil {
+		return fmt.Errorf("migrando evidencias: %w", err)
+	}
+	tag, err := tx.Exec(ctx,
+		`UPDATE lancamentos SET situacao = 'descartado' WHERE id = $1 AND situacao = 'provisorio'`,
+		provisorioID,
+	)
+	if err != nil {
+		return fmt.Errorf("descartando provisorio: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return fmt.Errorf("fundindo: lancamento %s nao esta provisorio", provisorioID)
+	}
+	return tx.Commit(ctx)
+}
+
+func (r *Repositorio) ConfirmarProvisorio(ctx context.Context, id identidade.ID) error {
+	if _, err := r.pool.Exec(ctx,
+		`UPDATE lancamentos SET situacao = 'confirmado' WHERE id = $1 AND situacao = 'provisorio'`, id,
+	); err != nil {
+		return fmt.Errorf("confirmando provisorio: %w", err)
+	}
+	return nil
+}
+
 // argumentosDeInsercao existe porque duas queries inserem lancamento (Salvar
 // e a importacao com ocorrencia); a lista de colunas muda junto nos dois.
 func argumentosDeInsercao(l lancamento.Lancamento) []any {

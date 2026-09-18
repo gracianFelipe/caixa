@@ -13,6 +13,7 @@ import (
 	"github.com/gracianFelipe/caixa/internal/dominio/identidade"
 	"github.com/gracianFelipe/caixa/internal/dominio/lancamento"
 	"github.com/gracianFelipe/caixa/internal/dominio/ocorrencia"
+	"github.com/gracianFelipe/caixa/internal/dominio/orcamento"
 	"github.com/gracianFelipe/caixa/internal/dominio/pergunta"
 )
 
@@ -34,6 +35,13 @@ type RepositorioDeLancamentos interface {
 	// dias, nao descartados e SEM evidencia da origem informada — o filtro
 	// que impede dois gastos legitimos iguais de virarem um so.
 	CandidatosParaConciliacao(ctx context.Context, valor dinheiro.Centavos, instante time.Time, origem ocorrencia.Origem) ([]conciliacao.Candidato, error)
+	// GastoConfirmado soma as saidas confirmadas da categoria no mes, como
+	// magnitude positiva — e o numero que se compara com o limite.
+	GastoConfirmado(ctx context.Context, cat categoria.ID, comp competencia.Competencia) (dinheiro.Centavos, error)
+	// FundirProvisorio move as evidencias do provisorio para o destino e
+	// marca o provisorio como descartado, numa transacao.
+	FundirProvisorio(ctx context.Context, provisorioID, destinoID identidade.ID) error
+	ConfirmarProvisorio(ctx context.Context, id identidade.ID) error
 }
 
 // RepositorioDeOcorrencias grava evidencia, fato e evento na mesma transacao.
@@ -57,14 +65,31 @@ type RepositorioDeEventos interface {
 // RepositorioDePerguntas controla as perguntas abertas no Telegram.
 type RepositorioDePerguntas interface {
 	Criar(ctx context.Context, p pergunta.Pergunta) error
+	PorID(ctx context.Context, id identidade.ID) (pergunta.Pergunta, bool, error)
 	AbertaDoLancamento(ctx context.Context, lancamentoID identidade.ID) (pergunta.Pergunta, bool, error)
 	MarcarRespondida(ctx context.Context, lancamentoID identidade.ID) error
 }
 
-// MensageiroDeCategoria e o que a fila precisa do Telegram — declarado aqui,
-// no consumidor; saida/telegram implementa.
-type MensageiroDeCategoria interface {
-	PerguntarCategoria(ctx context.Context, chatID int64, l lancamento.Lancamento, opcoes []categoria.Categoria) (mensagemID int64, err error)
+// Mensageiro e o que a fila precisa do Telegram — declarado aqui, no
+// consumidor; saida/telegram implementa. O id da pergunta viaja no botao,
+// por isso entra como parametro em vez de nascer depois.
+type Mensageiro interface {
+	PerguntarCategoria(ctx context.Context, chatID int64, perguntaID identidade.ID, l lancamento.Lancamento, opcoes []categoria.Categoria) (mensagemID int64, err error)
+	PerguntarConciliacao(ctx context.Context, chatID int64, perguntaID identidade.ID, provisorio, candidato lancamento.Lancamento) (mensagemID int64, err error)
+	EnviarAviso(ctx context.Context, chatID int64, texto string) error
+}
+
+// RepositorioDeOrcamentos guarda limites e resolve o vigente (especifico do
+// mes vence o padrao).
+type RepositorioDeOrcamentos interface {
+	Definir(ctx context.Context, o orcamento.Orcamento) error
+	LimiteVigente(ctx context.Context, cat categoria.ID, comp competencia.Competencia) (dinheiro.Centavos, bool, error)
+}
+
+// RepositorioDeAlertas registra emissoes. RegistrarSeNovo devolve false se o
+// alerta (tipo, chave) ja foi emitido — idempotencia por constraint.
+type RepositorioDeAlertas interface {
+	RegistrarSeNovo(ctx context.Context, tipo, chave string) (bool, error)
 }
 
 // RepositorioDeRegras entrega as regras ativas e registra o aprendizado que

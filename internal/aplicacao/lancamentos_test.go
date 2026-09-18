@@ -78,6 +78,15 @@ func (r *repoEmMemoria) CandidatosParaConciliacao(context.Context, dinheiro.Cent
 	return r.candidatos, nil
 }
 
+func (r *repoEmMemoria) GastoConfirmado(context.Context, categoria.ID, competencia.Competencia) (dinheiro.Centavos, error) {
+	return 0, nil
+}
+
+func (r *repoEmMemoria) FundirProvisorio(context.Context, identidade.ID, identidade.ID) error {
+	return nil
+}
+func (r *repoEmMemoria) ConfirmarProvisorio(context.Context, identidade.ID) error { return nil }
+
 func (r *repoEmMemoria) DaCompetencia(_ context.Context, c competencia.Competencia) ([]lancamento.Lancamento, error) {
 	if r.falha != nil {
 		return nil, r.falha

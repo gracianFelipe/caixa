@@ -70,16 +70,18 @@ func executar(ctx context.Context, log *slog.Logger) error {
 	defer pool.Close()
 
 	cliente := telegram.NovoCliente(cfg.token, "")
-	fila := aplicacao.NovaFila(
-		postgres.NovoRepositorioDeEventos(pool),
-		postgres.NovoRepositorio(pool),
-		postgres.NovoRepositorioDePerguntas(pool),
-		postgres.NovoRepositorioDeCategorias(pool),
-		postgres.NovoRepositorioDeRegras(pool),
-		telegram.NovoMensageiro(cliente),
-		relogio.Sistema{},
-		cfg.chatID,
-	)
+	fila := aplicacao.NovaFila(aplicacao.DependenciasDaFila{
+		Eventos:     postgres.NovoRepositorioDeEventos(pool),
+		Lancamentos: postgres.NovoRepositorio(pool),
+		Perguntas:   postgres.NovoRepositorioDePerguntas(pool),
+		Categorias:  postgres.NovoRepositorioDeCategorias(pool),
+		Regras:      postgres.NovoRepositorioDeRegras(pool),
+		Orcamentos:  postgres.NovoRepositorioDeOrcamentos(pool),
+		Alertas:     postgres.NovoRepositorioDeAlertas(pool),
+		Mensageiro:  telegram.NovoMensageiro(cliente),
+		Relogio:     relogio.Sistema{},
+		ChatID:      cfg.chatID,
+	})
 
 	ctxSinal, pararSinal := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	defer pararSinal()
@@ -166,12 +168,27 @@ func lacoDeAtualizacoes(ctx context.Context, cliente *telegram.Cliente, fila *ap
 }
 
 func responderCallback(ctx context.Context, cliente *telegram.Cliente, fila *aplicacao.Fila, a telegram.Atualizacao) error {
-	lancamentoID, categoriaID, err := telegram.AnalisarCallback(a.Callback)
+	cb, err := telegram.AnalisarCallback(a.Callback)
 	if err != nil {
 		return cliente.ConfirmarCallback(ctx, a.CallbackID, "botao invalido")
 	}
 
-	l, escolhida, err := fila.ResponderCategoria(ctx, lancamentoID, categoriaID)
+	if cb.EhConciliacao {
+		if _, err := fila.ResponderConciliacao(ctx, cb.PerguntaID, cb.Conciliar); err != nil {
+			_ = cliente.ConfirmarCallback(ctx, a.CallbackID, "nao consegui aplicar")
+			return err
+		}
+		resposta := "gasto novo confirmado"
+		if cb.Conciliar {
+			resposta = "fundido: uma linha, duas evidencias"
+		}
+		if err := cliente.ConfirmarCallback(ctx, a.CallbackID, resposta); err != nil {
+			return err
+		}
+		return cliente.EditarMensagem(ctx, a.ChatID, a.MensagemID, "conciliacao: "+resposta+" ✔")
+	}
+
+	l, escolhida, err := fila.ResponderCategoria(ctx, cb.PerguntaID, cb.Categoria)
 	if err != nil {
 		_ = cliente.ConfirmarCallback(ctx, a.CallbackID, "nao consegui aplicar")
 		return err

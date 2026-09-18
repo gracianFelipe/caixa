@@ -39,3 +39,20 @@ func TestNova(t *testing.T) {
 		})
 	}
 }
+
+func TestNovaDeConciliacao(t *testing.T) {
+	agora := time.Now()
+	idP, idL, idRef := identidade.ID{1}, identidade.ID{2}, identidade.ID{3}
+
+	p, err := NovaDeConciliacao(idP, idL, idRef, 777, agora)
+	if err != nil {
+		t.Fatalf("NovaDeConciliacao: %v", err)
+	}
+	if p.Tipo != TipoConciliacao || p.Referencia != idRef {
+		t.Errorf("pergunta = %+v", p)
+	}
+
+	if _, err := NovaDeConciliacao(idP, idL, identidade.ID{}, 777, agora); !errors.Is(err, ErrSemReferencia) {
+		t.Errorf("sem referencia: %v", err)
+	}
+}

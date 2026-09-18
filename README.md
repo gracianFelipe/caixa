@@ -43,8 +43,14 @@ numa entrevista técnica. Os contratos que o código obedece estão em
   idênticos no mesmo dia — é resolvido por filtro de candidatos (só concorre
   lançamento SEM evidência da origem que chega), com teste nomeando a cena.
 
-Próximo: orçamentos e alertas (Fase 4b), relatório com cinco detectores (5),
-PWA embutido (6), IMAP (7), deploy (8).
+* **008 (Fase 4b)** — orçamentos por categoria (`caixactl orcamento`, limite
+  do mês vence o padrão via `UNIQUE NULLS NOT DISTINCT`), alerta de 80%/100%
+  que chega UMA vez (constraint `(tipo, chave)`, não memória de processo), e
+  o teclado "mesmo gasto / gasto novo" que resolve o provisório — o callback
+  carrega o id da pergunta porque dois UUIDs estouram os 64 bytes do Telegram.
+
+Próximo: relatório com cinco detectores (Fase 5), PWA embutido (6), IMAP (7),
+deploy (8).
 
 ## Arquitetura em uma frase
 
