@@ -64,7 +64,13 @@ numa entrevista técnica. Os contratos que o código obedece estão em
   atualiza a tela aberta), telas Mês/Lançamentos/Relatório/Orçamentos com
   categoria em um toque. Rotas ganharam prefixo `/api`.
 
-Próximo: IMAP (Fase 7), deploy (8).
+* **011 (Fase 8)** — deploy completo: worker na imagem e no compose,
+  `restart: unless-stopped`, DSN keyword (senha não passa por URL), Caddy com
+  TLS automático + HSTS, runbook com backup/restauração em
+  [`docs/deploy.md`](docs/deploy.md). Fase 9 (SQS/S3) descartada de
+  propósito: as portas já provaram valor com dois adaptadores + fakes.
+
+Próximo: IMAP do Bradesco (Fase 7) — a última premissa não verificada.
 
 ## Arquitetura em uma frase
 

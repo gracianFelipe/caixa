@@ -1,0 +1,15 @@
+# Caddy na frente da API: TLS automatico (Let's Encrypt), HSTS e WebSocket.
+# Troque caixa.exemplo.com.br pelo seu dominio; o Caddy cuida do certificado.
+
+caixa.exemplo.com.br {
+	encode zstd gzip
+
+	header {
+		# HSTS mora aqui, nunca na API em texto puro do dev.
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		-Server
+	}
+
+	# WebSocket e HTTP vao para o mesmo upstream; o Caddy detecta o Upgrade.
+	reverse_proxy 127.0.0.1:8080
+}
