@@ -174,10 +174,11 @@ roda tudo isso com `-race`, um Postgres 17 de serviço, `govulncheck` e Gitleaks
   `lancamento`, `ocorrencia`.
 
 Fica na raiz: `internal/aplicacao` (casos de uso + `portas.go`),
-`internal/adaptadores/{entrada/web, entrada/extrato, saida/postgres, saida/relogio}`
+`internal/adaptadores/{entrada/web, entrada/extrato, saida/postgres, saida/relogio, saida/telegram}`
 (`extrato` é o tokenizador OFX próprio — SGML, Windows-1252, dinheiro sem
 float; heurística de meio ajustável com dados reais),
-`cmd/api`, `cmd/caixactl` (subcomandos por `flag.NewFlagSet`; hoje `migrar`),
+`cmd/api`, `cmd/worker` (outbox + long polling do Telegram), `cmd/caixactl`
+(subcomandos por `flag.NewFlagSet`: `migrar`, `importar`),
 `migracoes/` (SQLs + pacote `migracoes` com `go:embed`; migrador próprio em
 `saida/postgres/migrador.go` — decisão na spec 002, sem goose), `deploy/`,
 `.specs/` (specs numeradas; executadas vão para `archive/`),

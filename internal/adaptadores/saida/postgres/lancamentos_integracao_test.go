@@ -16,9 +16,27 @@ import (
 	"github.com/google/go-cmp/cmp"
 
 	"github.com/gracianFelipe/caixa/internal/dominio/competencia"
+	"github.com/gracianFelipe/caixa/internal/dominio/evento"
 	"github.com/gracianFelipe/caixa/internal/dominio/identidade"
 	"github.com/gracianFelipe/caixa/internal/dominio/lancamento"
 )
+
+// eventoPara cria o evento de outbox que Salvar exige e registra a limpeza.
+func eventoPara(t *testing.T, repo *Repositorio, l lancamento.Lancamento) evento.Evento {
+	t.Helper()
+	id, err := identidade.NovaV7(time.Now(), rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	e, err := evento.Novo(id, evento.LancamentoCriado, l.ID, time.Now().UTC())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_, _ = repo.pool.Exec(context.Background(), "DELETE FROM eventos WHERE id = $1", id)
+	})
+	return e
+}
 
 var saoPaulo = time.FixedZone("America/Sao_Paulo", -3*60*60)
 
@@ -73,7 +91,7 @@ func TestSalvarEDaCompetencia(t *testing.T) {
 	outroMes := novoLancamento(t, repo, time.Date(1999, time.April, 1, 12, 0, 0, 0, time.UTC))
 
 	for _, l := range []lancamento.Lancamento{segundo, primeiro, outroMes} {
-		if err := repo.Salvar(ctx, l); err != nil {
+		if err := repo.Salvar(ctx, l, eventoPara(t, repo, l)); err != nil {
 			t.Fatalf("Salvar: %v", err)
 		}
 	}
@@ -96,12 +114,12 @@ func TestSalvarDuplicado(t *testing.T) {
 	ctx := context.Background()
 
 	l := novoLancamento(t, repo, time.Date(1999, time.May, 1, 12, 0, 0, 0, time.UTC))
-	if err := repo.Salvar(ctx, l); err != nil {
+	if err := repo.Salvar(ctx, l, eventoPara(t, repo, l)); err != nil {
 		t.Fatal(err)
 	}
 
 	// A chave primaria e a primeira linha de defesa contra duplicata.
-	err := repo.Salvar(ctx, l)
+	err := repo.Salvar(ctx, l, eventoPara(t, repo, l))
 	if err == nil {
 		t.Fatal("segundo Salvar do mesmo id deveria falhar")
 	}

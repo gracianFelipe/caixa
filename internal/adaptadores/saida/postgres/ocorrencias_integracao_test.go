@@ -8,10 +8,27 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gracianFelipe/caixa/internal/dominio/evento"
 	"github.com/gracianFelipe/caixa/internal/dominio/identidade"
 	"github.com/gracianFelipe/caixa/internal/dominio/lancamento"
 	"github.com/gracianFelipe/caixa/internal/dominio/ocorrencia"
 )
+
+func eventoDeImportacao(t *testing.T, repo *Ocorrencias, l lancamento.Lancamento) evento.Evento {
+	t.Helper()
+	id, err := identidade.NovaV7(time.Now(), rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	e, err := evento.Novo(id, evento.LancamentoCriado, l.ID, time.Now().UTC())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_, _ = repo.pool.Exec(context.Background(), "DELETE FROM eventos WHERE id = $1", id)
+	})
+	return e
+}
 
 func ocorrenciasDeTeste(t *testing.T) *Ocorrencias {
 	t.Helper()
@@ -58,7 +75,7 @@ func TestCriarComLancamento(t *testing.T) {
 
 	o, l := evidencia(t, repo, "payload unico "+time.Now().String(), "FIT-INT-1-"+time.Now().String())
 
-	criada, err := repo.CriarComLancamento(ctx, o, l)
+	criada, err := repo.CriarComLancamento(ctx, o, l, eventoDeImportacao(t, repo, l))
 	if err != nil {
 		t.Fatalf("CriarComLancamento: %v", err)
 	}
@@ -85,13 +102,13 @@ func TestCriarComLancamentoDuplicada(t *testing.T) {
 
 	t.Run("mesma impressao", func(t *testing.T) {
 		o1, l1 := evidencia(t, repo, "payload repetido "+agora, "FIT-DUP-A-"+agora)
-		if _, err := repo.CriarComLancamento(ctx, o1, l1); err != nil {
+		if _, err := repo.CriarComLancamento(ctx, o1, l1, eventoDeImportacao(t, repo, l1)); err != nil {
 			t.Fatal(err)
 		}
 
 		// Mesmo payload => mesma impressao, id externo diferente.
 		o2, l2 := evidencia(t, repo, "payload repetido "+agora, "FIT-DUP-B-"+agora)
-		criada, err := repo.CriarComLancamento(ctx, o2, l2)
+		criada, err := repo.CriarComLancamento(ctx, o2, l2, eventoDeImportacao(t, repo, l2))
 		if err != nil {
 			t.Fatalf("duplicata de impressao nao pode ser erro: %v", err)
 		}
@@ -112,12 +129,12 @@ func TestCriarComLancamentoDuplicada(t *testing.T) {
 
 	t.Run("mesmo id externo com payload diferente", func(t *testing.T) {
 		o1, l1 := evidencia(t, repo, "payload C "+agora, "FIT-DUP-C-"+agora)
-		if _, err := repo.CriarComLancamento(ctx, o1, l1); err != nil {
+		if _, err := repo.CriarComLancamento(ctx, o1, l1, eventoDeImportacao(t, repo, l1)); err != nil {
 			t.Fatal(err)
 		}
 
 		o2, l2 := evidencia(t, repo, "payload D "+agora, "FIT-DUP-C-"+agora)
-		criada, err := repo.CriarComLancamento(ctx, o2, l2)
+		criada, err := repo.CriarComLancamento(ctx, o2, l2, eventoDeImportacao(t, repo, l2))
 		if err != nil {
 			t.Fatalf("duplicata de id externo nao pode ser erro: %v", err)
 		}

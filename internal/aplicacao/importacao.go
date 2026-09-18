@@ -8,6 +8,7 @@ import (
 
 	"github.com/gracianFelipe/caixa/internal/dominio/categorizacao"
 	"github.com/gracianFelipe/caixa/internal/dominio/dinheiro"
+	"github.com/gracianFelipe/caixa/internal/dominio/evento"
 	"github.com/gracianFelipe/caixa/internal/dominio/identidade"
 	"github.com/gracianFelipe/caixa/internal/dominio/lancamento"
 	"github.com/gracianFelipe/caixa/internal/dominio/ocorrencia"
@@ -96,7 +97,16 @@ func (s *Importacao) Importar(ctx context.Context, origem ocorrencia.Origem, ite
 			}
 		}
 
-		criada, err := s.ocorrencias.CriarComLancamento(ctx, o, l)
+		idEvento, err := identidade.NovaV7(s.relogio.Agora(), rand.Reader)
+		if err != nil {
+			return resumo, fmt.Errorf("gerando id do evento: %w", err)
+		}
+		e, err := evento.Novo(idEvento, evento.LancamentoCriado, l.ID, s.relogio.Agora())
+		if err != nil {
+			return resumo, fmt.Errorf("item %d: %w", i+1, err)
+		}
+
+		criada, err := s.ocorrencias.CriarComLancamento(ctx, o, l, e)
 		if err != nil {
 			return resumo, fmt.Errorf("item %d: %w", i+1, err)
 		}

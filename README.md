@@ -30,9 +30,15 @@ numa entrevista técnica. Os contratos que o código obedece estão em
 
 * **005** — Dockerfile multi-stage (distroless, não-root, binário estático)
   e compose com migração one-shot antes da API; build provado na CI.
+* **006 (Fase 3)** — outbox transacional (evento gravado na mesma transação
+  do lançamento; worker consome com `FOR UPDATE SKIP LOCKED`, provado com
+  dois consumidores concorrentes), `cmd/worker`, cliente Telegram próprio
+  (~150 linhas, long polling, token jamais em erro/log — testado), pergunta
+  de categoria com teclado inline que vira regra aprendida, e
+  `POST /atalho/lancamentos` com Bearer em comparação constante.
 
-Próximo: Telegram + worker (Fase 3), conciliação e orçamentos (4), relatório
-com cinco detectores (5), PWA embutido (6), IMAP (7), deploy (8).
+Próximo: conciliação e orçamentos (Fase 4), relatório com cinco detectores
+(5), PWA embutido (6), IMAP (7), deploy (8).
 
 ## Arquitetura em uma frase
 
@@ -83,6 +89,7 @@ Endpoints:
 | `POST` | `/lancamentos` | registra um lançamento |
 | `GET` | `/lancamentos?competencia=AAAA-MM` | lista o mês |
 | `GET` | `/categorias` | vocabulário fixo de categorias |
+| `POST` | `/atalho/lancamentos` | captura rápida (Atalho do iOS); exige `Authorization: Bearer` de `CAIXA_ATALHO_TOKEN` |
 
 ```powershell
 # no PowerShell, mande JSON por arquivo: aspas escapadas na linha de comando quebram
@@ -98,7 +105,7 @@ curl.exe "http://localhost:8080/lancamentos?competencia=2026-09"
 ```powershell
 go vet ./...
 go test ./...                              # unitarios, sem banco
-go test -tags=integracao ./...             # exige CAIXA_BD_URL
+go test -tags=integracao ./...             # exige CAIXA_BD_URL (sem -race no Windows: exige gcc; a CI cobre)
 go test -fuzz=FuzzAnalisar -fuzztime=30s ./internal/dominio/dinheiro
 ```
 

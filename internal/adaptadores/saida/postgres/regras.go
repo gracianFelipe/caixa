@@ -66,3 +66,20 @@ type linhaDeRegra struct {
 	padrao      string
 	prioridade  int16
 }
+
+// RegistrarAprendida grava a resposta humana como regra exata de prioridade
+// 100 (acima das sementes). ON CONFLICT atualiza: se o dono mudar de ideia
+// sobre a mesma contraparte, a ultima palavra vence — e a regra reativa.
+func (r *Regras) RegistrarAprendida(ctx context.Context, cat categoria.ID, padraoExato string) error {
+	if _, err := r.pool.Exec(ctx,
+		`INSERT INTO regras_categorizacao (categoria_id, tipo, padrao, prioridade, origem)
+		 VALUES ($1, 'exata', $2, 100, 'aprendida')
+		 ON CONFLICT (tipo, padrao) DO UPDATE
+		 SET categoria_id = EXCLUDED.categoria_id, origem = 'aprendida',
+		     prioridade = EXCLUDED.prioridade, ativa = true`,
+		int16(cat), padraoExato,
+	); err != nil {
+		return fmt.Errorf("registrando regra aprendida: %w", err)
+	}
+	return nil
+}

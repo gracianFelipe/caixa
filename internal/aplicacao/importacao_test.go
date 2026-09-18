@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/gracianFelipe/caixa/internal/dominio/categorizacao"
+	"github.com/gracianFelipe/caixa/internal/dominio/evento"
 	"github.com/gracianFelipe/caixa/internal/dominio/lancamento"
 	"github.com/gracianFelipe/caixa/internal/dominio/ocorrencia"
 )
@@ -25,7 +26,7 @@ func novoFakeDeOcorrencias() *ocorrenciasEmMemoria {
 	return &ocorrenciasEmMemoria{porImpressao: make(map[string]bool)}
 }
 
-func (r *ocorrenciasEmMemoria) CriarComLancamento(_ context.Context, o ocorrencia.Ocorrencia, l lancamento.Lancamento) (bool, error) {
+func (r *ocorrenciasEmMemoria) CriarComLancamento(_ context.Context, o ocorrencia.Ocorrencia, l lancamento.Lancamento, _ evento.Evento) (bool, error) {
 	if r.falha != nil {
 		return false, r.falha
 	}

@@ -9,6 +9,8 @@ import (
 	"github.com/gracianFelipe/caixa/internal/dominio/categoria"
 	"github.com/gracianFelipe/caixa/internal/dominio/categorizacao"
 	"github.com/gracianFelipe/caixa/internal/dominio/competencia"
+	"github.com/gracianFelipe/caixa/internal/dominio/evento"
+	"github.com/gracianFelipe/caixa/internal/dominio/identidade"
 	"github.com/gracianFelipe/caixa/internal/dominio/lancamento"
 )
 
@@ -41,15 +43,30 @@ func regraDeTeste(t *testing.T, id int64, cat categoria.ID, tipo categorizacao.T
 // repoEmMemoria e um fake, nao um mock: implementa a porta de verdade, com
 // comportamento observavel, em vez de gravar uma sequencia esperada de chamadas.
 type repoEmMemoria struct {
-	salvos []lancamento.Lancamento
-	falha  error
+	salvos  []lancamento.Lancamento
+	eventos []evento.Evento
+	falha   error
 }
 
-func (r *repoEmMemoria) Salvar(_ context.Context, l lancamento.Lancamento) error {
+func (r *repoEmMemoria) Salvar(_ context.Context, l lancamento.Lancamento, e evento.Evento) error {
 	if r.falha != nil {
 		return r.falha
 	}
 	r.salvos = append(r.salvos, l)
+	r.eventos = append(r.eventos, e)
+	return nil
+}
+
+func (r *repoEmMemoria) PorID(_ context.Context, id identidade.ID) (lancamento.Lancamento, bool, error) {
+	for _, l := range r.salvos {
+		if l.ID == id {
+			return l, true, nil
+		}
+	}
+	return lancamento.Lancamento{}, false, nil
+}
+
+func (r *repoEmMemoria) AtribuirCategoria(context.Context, identidade.ID, categoria.ID, lancamento.OrigemDaCategoria) error {
 	return nil
 }
 

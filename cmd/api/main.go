@@ -34,13 +34,16 @@ func main() {
 type config struct {
 	bdURL        string
 	httpEndereco string
+	atalhoToken  string
 }
 
-// lerConfig le tudo do ambiente. A URL do banco carrega a senha e nunca e logada.
+// lerConfig le tudo do ambiente. A URL do banco e o token carregam segredo e
+// nunca sao logados.
 func lerConfig() (config, error) {
 	c := config{
 		bdURL:        os.Getenv("CAIXA_BD_URL"),
 		httpEndereco: os.Getenv("CAIXA_HTTP_ENDERECO"),
+		atalhoToken:  os.Getenv("CAIXA_ATALHO_TOKEN"),
 	}
 	if c.bdURL == "" {
 		return config{}, errors.New("CAIXA_BD_URL nao definida")
@@ -80,7 +83,7 @@ func executar(ctx context.Context, log *slog.Logger) error {
 
 	servidor := &http.Server{
 		Addr:              cfg.httpEndereco,
-		Handler:           web.NovoHandler(lancamentos, catalogo, log),
+		Handler:           web.NovoHandler(lancamentos, catalogo, cfg.atalhoToken, log),
 		ReadHeaderTimeout: 5 * time.Second, // fecha conexao que abre e nao manda cabecalho (slowloris)
 		ReadTimeout:       10 * time.Second,
 		WriteTimeout:      10 * time.Second,

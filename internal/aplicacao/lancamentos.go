@@ -7,10 +7,13 @@ import (
 	"context"
 	"crypto/rand"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/gracianFelipe/caixa/internal/dominio/categorizacao"
 	"github.com/gracianFelipe/caixa/internal/dominio/competencia"
+	"github.com/gracianFelipe/caixa/internal/dominio/dinheiro"
+	"github.com/gracianFelipe/caixa/internal/dominio/evento"
 	"github.com/gracianFelipe/caixa/internal/dominio/identidade"
 	"github.com/gracianFelipe/caixa/internal/dominio/lancamento"
 )
@@ -49,10 +52,53 @@ func (s *Lancamentos) Registrar(ctx context.Context, d lancamento.Dados) (lancam
 		return lancamento.Lancamento{}, err
 	}
 
-	if err := s.repo.Salvar(ctx, l); err != nil {
+	e, err := s.eventoDeCriacao(l)
+	if err != nil {
+		return lancamento.Lancamento{}, err
+	}
+
+	if err := s.repo.Salvar(ctx, l, e); err != nil {
 		return lancamento.Lancamento{}, fmt.Errorf("salvando lancamento %s: %w", l.ID, err)
 	}
 	return l, nil
+}
+
+// Capturar e o caso de uso do Atalho do iOS: valor em texto brasileiro,
+// instante = agora, meio padrao pix. Valor sem sinal explicito e saida —
+// captura rapida existe para registrar gasto no momento em que acontece.
+func (s *Lancamentos) Capturar(ctx context.Context, valorTexto, contraparte, meioTexto string) (lancamento.Lancamento, error) {
+	valor, err := dinheiro.Analisar(valorTexto)
+	if err != nil {
+		return lancamento.Lancamento{}, err
+	}
+	semSinal := !strings.HasPrefix(strings.TrimSpace(valorTexto), "+") &&
+		!strings.HasPrefix(strings.TrimSpace(valorTexto), "-")
+	if semSinal && valor > 0 {
+		valor = -valor
+	}
+
+	if strings.TrimSpace(meioTexto) == "" {
+		meioTexto = string(lancamento.MeioPix)
+	}
+
+	return s.Registrar(ctx, lancamento.Dados{
+		OcorridoEm:  s.relogio.Agora(),
+		Valor:       valor,
+		Meio:        lancamento.Meio(meioTexto),
+		Contraparte: contraparte,
+	})
+}
+
+func (s *Lancamentos) eventoDeCriacao(l lancamento.Lancamento) (evento.Evento, error) {
+	id, err := identidade.NovaV7(s.relogio.Agora(), rand.Reader)
+	if err != nil {
+		return evento.Evento{}, fmt.Errorf("gerando id do evento: %w", err)
+	}
+	e, err := evento.Novo(id, evento.LancamentoCriado, l.ID, s.relogio.Agora())
+	if err != nil {
+		return evento.Evento{}, err
+	}
+	return e, nil
 }
 
 // classificar aplica as regras ativas; sem correspondencia, o lancamento

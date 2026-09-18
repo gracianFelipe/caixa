@@ -8,6 +8,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/gracianFelipe/caixa/internal/aplicacao"
+	"github.com/gracianFelipe/caixa/internal/dominio/evento"
 	"github.com/gracianFelipe/caixa/internal/dominio/lancamento"
 	"github.com/gracianFelipe/caixa/internal/dominio/ocorrencia"
 )
@@ -34,9 +35,10 @@ ON CONFLICT DO NOTHING`
 const sqlVincularLancamento = `
 UPDATE ocorrencias SET lancamento_id = $1, resultado = $2 WHERE id = $3`
 
-// CriarComLancamento grava evidencia e fato na MESMA transacao: ou os dois
-// entram, ou nenhum. Devolve false (sem erro) quando a ocorrencia ja existia.
-func (r *Ocorrencias) CriarComLancamento(ctx context.Context, o ocorrencia.Ocorrencia, l lancamento.Lancamento) (bool, error) {
+// CriarComLancamento grava evidencia, fato e evento na MESMA transacao: ou
+// os tres entram, ou nenhum. Devolve false (sem erro) quando a ocorrencia ja
+// existia — e nesse caso o evento tambem nao e gravado (nada aconteceu).
+func (r *Ocorrencias) CriarComLancamento(ctx context.Context, o ocorrencia.Ocorrencia, l lancamento.Lancamento, e evento.Evento) (bool, error) {
 	// payload JSONB guarda o texto cru embrulhado em JSON aqui, na borda:
 	// numero nunca e interpretado, entao float nunca acontece.
 	payload, err := json.Marshal(map[string]string{"bruto": o.Payload})
@@ -71,6 +73,10 @@ func (r *Ocorrencias) CriarComLancamento(ctx context.Context, o ocorrencia.Ocorr
 	if _, err := tx.Exec(ctx, sqlVincularLancamento,
 		l.ID, string(ocorrencia.ResultadoCriou), o.ID); err != nil {
 		return false, fmt.Errorf("vinculando lancamento: %w", err)
+	}
+
+	if err := inserirEvento(ctx, tx, e); err != nil {
+		return false, err
 	}
 
 	if err := tx.Commit(ctx); err != nil {

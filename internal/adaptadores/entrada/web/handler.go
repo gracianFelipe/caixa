@@ -4,11 +4,14 @@ package web
 
 import (
 	"context"
+	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"io"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gracianFelipe/caixa/internal/dominio/categoria"
@@ -23,6 +26,7 @@ import (
 type Lancamentos interface {
 	Registrar(ctx context.Context, d lancamento.Dados) (lancamento.Lancamento, error)
 	Listar(ctx context.Context, c competencia.Competencia) ([]lancamento.Lancamento, error)
+	Capturar(ctx context.Context, valorTexto, contraparte, meioTexto string) (lancamento.Lancamento, error)
 }
 
 // Catalogo e a segunda interface deste consumidor: separada de Lancamentos
@@ -46,8 +50,9 @@ type servidor struct {
 }
 
 // NovoHandler monta as rotas e devolve http.Handler, nao *ServeMux: quem
-// chama nao precisa saber como as rotas sao montadas.
-func NovoHandler(l Lancamentos, c Catalogo, log *slog.Logger) http.Handler {
+// chama nao precisa saber como as rotas sao montadas. atalhoToken vazio
+// desliga a rota do atalho — sem token nao existe endpoint para proteger.
+func NovoHandler(l Lancamentos, c Catalogo, atalhoToken string, log *slog.Logger) http.Handler {
 	s := &servidor{lancamentos: l, catalogo: c, log: log}
 
 	mux := http.NewServeMux()
@@ -55,8 +60,53 @@ func NovoHandler(l Lancamentos, c Catalogo, log *slog.Logger) http.Handler {
 	mux.HandleFunc("POST /lancamentos", s.registrar)
 	mux.HandleFunc("GET /lancamentos", s.listar)
 	mux.HandleFunc("GET /categorias", s.categorias)
+	if atalhoToken != "" {
+		mux.Handle("POST /atalho/lancamentos", exigirBearer(atalhoToken, http.HandlerFunc(s.capturar)))
+	}
 
 	return registrarAcesso(log, mux)
+}
+
+// exigirBearer compara o token em tempo constante. Os hashes igualam o
+// tamanho antes da comparacao: ConstantTimeCompare com tamanhos diferentes
+// devolve na hora e vazaria o comprimento do segredo.
+func exigirBearer(token string, proximo http.Handler) http.Handler {
+	esperado := sha256.Sum256([]byte(token))
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		recebido, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
+		if ok {
+			hash := sha256.Sum256([]byte(recebido))
+			ok = subtle.ConstantTimeCompare(esperado[:], hash[:]) == 1
+		}
+		if !ok {
+			// 401 seco: nao se explica autenticacao para quem errou o token.
+			responderJSON(w, http.StatusUnauthorized, respostaDeErro{Erro: "nao autorizado"})
+			return
+		}
+		proximo.ServeHTTP(w, r)
+	})
+}
+
+// pedidoDeAtalho e a captura rapida do iOS: valor em texto brasileiro.
+type pedidoDeAtalho struct {
+	Valor       string `json:"valor"`
+	Contraparte string `json:"contraparte"`
+	Meio        string `json:"meio"`
+}
+
+func (s *servidor) capturar(w http.ResponseWriter, r *http.Request) {
+	var pedido pedidoDeAtalho
+	if err := lerJSON(w, r, &pedido); err != nil {
+		s.responderErro(w, r, err)
+		return
+	}
+
+	l, err := s.lancamentos.Capturar(r.Context(), pedido.Valor, pedido.Contraparte, pedido.Meio)
+	if err != nil {
+		s.responderErro(w, r, err)
+		return
+	}
+	responderJSON(w, http.StatusCreated, paraResposta(l))
 }
 
 // pedidoDeLancamento e o contrato de entrada. valor_centavos e int64: o
@@ -201,6 +251,9 @@ var errosDoCliente = []error{
 	lancamento.ErrMeioInvalido,
 	lancamento.ErrContraparteVazia,
 	lancamento.ErrContraparteLonga,
+	dinheiro.ErrVazio,
+	dinheiro.ErrFormato,
+	dinheiro.ErrEstouro,
 }
 
 func (s *servidor) responderErro(w http.ResponseWriter, r *http.Request, err error) {

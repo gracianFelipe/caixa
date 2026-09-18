@@ -4,6 +4,7 @@ package postgres
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -14,6 +15,7 @@ import (
 	"github.com/gracianFelipe/caixa/internal/dominio/categoria"
 	"github.com/gracianFelipe/caixa/internal/dominio/competencia"
 	"github.com/gracianFelipe/caixa/internal/dominio/dinheiro"
+	"github.com/gracianFelipe/caixa/internal/dominio/evento"
 	"github.com/gracianFelipe/caixa/internal/dominio/identidade"
 	"github.com/gracianFelipe/caixa/internal/dominio/lancamento"
 )
@@ -52,12 +54,56 @@ INSERT INTO lancamentos
 VALUES
     ($1, $2, $3, $4, $5, $6, $7, $8, $9)`
 
-// Salvar grava um lancamento novo. Conversoes explicitas para os tipos base
-// (int64, string): o dominio nao precisa saber como o pgx codifica.
-func (r *Repositorio) Salvar(ctx context.Context, l lancamento.Lancamento) error {
-	_, err := r.pool.Exec(ctx, sqlInserir, argumentosDeInsercao(l)...)
+// Salvar grava lancamento e evento do outbox na MESMA transacao: um commit,
+// dois fatos. Conversoes explicitas para os tipos base (int64, string): o
+// dominio nao precisa saber como o pgx codifica.
+func (r *Repositorio) Salvar(ctx context.Context, l lancamento.Lancamento, e evento.Evento) error {
+	tx, err := r.pool.Begin(ctx)
 	if err != nil {
+		return fmt.Errorf("abrindo transacao: %w", err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+
+	if _, err := tx.Exec(ctx, sqlInserir, argumentosDeInsercao(l)...); err != nil {
 		return fmt.Errorf("inserindo lancamento: %w", err)
+	}
+	if err := inserirEvento(ctx, tx, e); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
+const sqlPorID = `
+SELECT id, ocorrido_em, competencia, valor_centavos, meio, contraparte, contraparte_norm, categoria_id, categoria_origem
+FROM lancamentos
+WHERE id = $1`
+
+func (r *Repositorio) PorID(ctx context.Context, id identidade.ID) (lancamento.Lancamento, bool, error) {
+	rows, err := r.pool.Query(ctx, sqlPorID, id)
+	if err != nil {
+		return lancamento.Lancamento{}, false, fmt.Errorf("consultando lancamento: %w", err)
+	}
+	l, err := pgx.CollectOneRow(rows, lerLancamento)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return lancamento.Lancamento{}, false, nil
+	}
+	if err != nil {
+		return lancamento.Lancamento{}, false, err
+	}
+	return l, true, nil
+}
+
+// AtribuirCategoria muda so a categoria; o resto do lancamento e imutavel.
+func (r *Repositorio) AtribuirCategoria(ctx context.Context, id identidade.ID, cat categoria.ID, origem lancamento.OrigemDaCategoria) error {
+	tag, err := r.pool.Exec(ctx,
+		"UPDATE lancamentos SET categoria_id = $1, categoria_origem = $2 WHERE id = $3",
+		int16(cat), string(origem), id,
+	)
+	if err != nil {
+		return fmt.Errorf("atribuindo categoria: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return fmt.Errorf("atribuindo categoria: lancamento %s nao existe", id)
 	}
 	return nil
 }
