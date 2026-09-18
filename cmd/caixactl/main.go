@@ -110,6 +110,7 @@ func importar(ctx context.Context, caminhos []string, log *slog.Logger) error {
 
 	servico := aplicacao.NovoServicoDeImportacao(
 		postgres.NovoRepositorioDeOcorrencias(pool),
+		postgres.NovoRepositorioDeRegras(pool),
 		relogio.Sistema{},
 		fuso,
 	)

@@ -64,9 +64,7 @@ func (r *Ocorrencias) CriarComLancamento(ctx context.Context, o ocorrencia.Ocorr
 		return false, nil // duplicata: nada a fazer, transacao morre no defer
 	}
 
-	if _, err := tx.Exec(ctx, sqlInserir,
-		l.ID, l.OcorridoEm, l.Competencia.PrimeiroDia(), int64(l.Valor),
-		string(l.Meio), l.Contraparte, l.ContraparteNorm); err != nil {
+	if _, err := tx.Exec(ctx, sqlInserir, argumentosDeInsercao(l)...); err != nil {
 		return false, fmt.Errorf("inserindo lancamento da ocorrencia: %w", err)
 	}
 

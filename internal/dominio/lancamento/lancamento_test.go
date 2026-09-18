@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
+	"github.com/gracianFelipe/caixa/internal/dominio/categoria"
 	"github.com/gracianFelipe/caixa/internal/dominio/competencia"
 	"github.com/gracianFelipe/caixa/internal/dominio/identidade"
 )
@@ -42,6 +43,7 @@ func TestNovo(t *testing.T) {
 		Meio:            MeioPix,
 		Contraparte:     "Supermercado XYZ 0042",
 		ContraparteNorm: "SUPERMERCADO XYZ",
+		CategoriaOrigem: CategoriaPendente,
 	}
 
 	// cmp.Diff mostra so o campo que divergiu; com != voce ve dois structs inteiros.
@@ -95,6 +97,44 @@ func TestNovoErro(t *testing.T) {
 			c.ajuste(&d)
 			if _, err := Novo(c.id, d, saoPaulo); !errors.Is(err, c.erro) {
 				t.Errorf("Novo devolveu %v, queria %v", err, c.erro)
+			}
+		})
+	}
+}
+
+func TestComCategoria(t *testing.T) {
+	base, err := Novo(idFixo, dadosValidos(), saoPaulo)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	categorizado, err := base.ComCategoria(2, CategoriaPorRegra)
+	if err != nil {
+		t.Fatalf("ComCategoria devolveu erro: %v", err)
+	}
+	if categorizado.CategoriaID != 2 || categorizado.CategoriaOrigem != CategoriaPorRegra {
+		t.Errorf("categoria = (%d, %s)", categorizado.CategoriaID, categorizado.CategoriaOrigem)
+	}
+	// Imutabilidade: o original nao muda.
+	if base.CategoriaID != 0 || base.CategoriaOrigem != CategoriaPendente {
+		t.Error("ComCategoria mutou o lancamento original")
+	}
+
+	casosDeErro := []struct {
+		nome   string
+		id     int16
+		origem OrigemDaCategoria
+		erro   error
+	}{
+		{"categoria zero", 0, CategoriaManual, ErrCategoriaInvalida},
+		{"categoria negativa", -1, CategoriaManual, ErrCategoriaInvalida},
+		{"origem pendente com categoria", 2, CategoriaPendente, ErrOrigemDeCategoria},
+		{"origem inventada", 2, "chute", ErrOrigemDeCategoria},
+	}
+	for _, c := range casosDeErro {
+		t.Run(c.nome, func(t *testing.T) {
+			if _, err := base.ComCategoria(categoria.ID(c.id), c.origem); !errors.Is(err, c.erro) {
+				t.Errorf("ComCategoria devolveu %v, queria %v", err, c.erro)
 			}
 		})
 	}

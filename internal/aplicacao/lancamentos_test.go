@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gracianFelipe/caixa/internal/dominio/categoria"
+	"github.com/gracianFelipe/caixa/internal/dominio/categorizacao"
 	"github.com/gracianFelipe/caixa/internal/dominio/competencia"
 	"github.com/gracianFelipe/caixa/internal/dominio/lancamento"
 )
@@ -16,6 +18,25 @@ var saoPaulo = time.FixedZone("America/Sao_Paulo", -3*60*60)
 type relogioFixo time.Time
 
 func (r relogioFixo) Agora() time.Time { return time.Time(r) }
+
+// regrasFixas implementa RepositorioDeRegras com uma lista em memoria.
+type regrasFixas struct {
+	regras []categorizacao.Regra
+	falha  error
+}
+
+func (r regrasFixas) Ativas(context.Context) ([]categorizacao.Regra, error) {
+	return r.regras, r.falha
+}
+
+func regraDeTeste(t *testing.T, id int64, cat categoria.ID, tipo categorizacao.Tipo, padrao string) categorizacao.Regra {
+	t.Helper()
+	regra, err := categorizacao.NovaRegra(id, cat, tipo, padrao, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return regra
+}
 
 // repoEmMemoria e um fake, nao um mock: implementa a porta de verdade, com
 // comportamento observavel, em vez de gravar uma sequencia esperada de chamadas.
@@ -57,7 +78,7 @@ func dadosValidos() lancamento.Dados {
 func TestRegistrar(t *testing.T) {
 	repo := &repoEmMemoria{}
 	agora := relogioFixo(time.Date(2026, time.September, 17, 18, 0, 0, 0, time.UTC))
-	s := NovoServicoDeLancamentos(repo, agora, saoPaulo)
+	s := NovoServicoDeLancamentos(repo, regrasFixas{}, agora, saoPaulo)
 
 	l, err := s.Registrar(context.Background(), dadosValidos())
 	if err != nil {
@@ -75,6 +96,40 @@ func TestRegistrar(t *testing.T) {
 	}
 	if c := l.Competencia.String(); c != "2026-09" {
 		t.Errorf("competencia = %s, queria 2026-09", c)
+	}
+	if l.CategoriaOrigem != lancamento.CategoriaPendente {
+		t.Errorf("sem regra aplicavel deveria ficar pendente, veio %s", l.CategoriaOrigem)
+	}
+}
+
+func TestRegistrarClassifica(t *testing.T) {
+	repo := &repoEmMemoria{}
+	regras := regrasFixas{regras: []categorizacao.Regra{
+		regraDeTeste(t, 7, 2, categorizacao.TipoContem, "IFOOD"),
+	}}
+	s := NovoServicoDeLancamentos(repo, regras, relogioFixo(time.Now()), saoPaulo)
+
+	d := dadosValidos()
+	d.Contraparte = "IFD*IFOOD RESTAURANTE 123"
+
+	l, err := s.Registrar(context.Background(), d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if l.CategoriaID != 2 || l.CategoriaOrigem != lancamento.CategoriaPorRegra {
+		t.Errorf("categoria = (%d, %s), queria (2, regra)", l.CategoriaID, l.CategoriaOrigem)
+	}
+	if repo.salvos[0].CategoriaID != 2 {
+		t.Error("a categoria nao chegou ao repositorio")
+	}
+}
+
+func TestRegistrarFalhaAoCarregarRegras(t *testing.T) {
+	falha := errors.New("tabela sumiu")
+	s := NovoServicoDeLancamentos(&repoEmMemoria{}, regrasFixas{falha: falha}, relogioFixo(time.Now()), saoPaulo)
+
+	if _, err := s.Registrar(context.Background(), dadosValidos()); !errors.Is(err, falha) {
+		t.Errorf("erro = %v, queria a falha das regras (engolir deixaria tudo pendente em silencio)", err)
 	}
 }
 
@@ -94,7 +149,7 @@ func TestRegistrarErro(t *testing.T) {
 
 	for _, c := range casos {
 		t.Run(c.nome, func(t *testing.T) {
-			s := NovoServicoDeLancamentos(c.repo, relogioFixo(time.Now()), saoPaulo)
+			s := NovoServicoDeLancamentos(c.repo, regrasFixas{}, relogioFixo(time.Now()), saoPaulo)
 			d := dadosValidos()
 			c.ajuste(&d)
 
@@ -111,7 +166,7 @@ func TestRegistrarErro(t *testing.T) {
 
 func TestListar(t *testing.T) {
 	repo := &repoEmMemoria{}
-	s := NovoServicoDeLancamentos(repo, relogioFixo(time.Now()), saoPaulo)
+	s := NovoServicoDeLancamentos(repo, regrasFixas{}, relogioFixo(time.Now()), saoPaulo)
 	ctx := context.Background()
 
 	setembro := dadosValidos()

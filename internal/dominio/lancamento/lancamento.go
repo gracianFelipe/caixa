@@ -9,6 +9,7 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/gracianFelipe/caixa/internal/dominio/categoria"
 	"github.com/gracianFelipe/caixa/internal/dominio/competencia"
 	"github.com/gracianFelipe/caixa/internal/dominio/dinheiro"
 	"github.com/gracianFelipe/caixa/internal/dominio/identidade"
@@ -41,12 +42,25 @@ func AnalisarMeio(texto string) (Meio, error) {
 const ContraparteMaxima = 200
 
 var (
-	ErrIDVazio          = errors.New("lancamento: id vazio")
-	ErrInstanteZero     = errors.New("lancamento: instante nao informado")
-	ErrValorZero        = errors.New("lancamento: valor nao pode ser zero")
-	ErrMeioInvalido     = errors.New("lancamento: meio de pagamento invalido")
-	ErrContraparteVazia = errors.New("lancamento: contraparte vazia")
-	ErrContraparteLonga = errors.New("lancamento: contraparte acima do limite")
+	ErrIDVazio           = errors.New("lancamento: id vazio")
+	ErrInstanteZero      = errors.New("lancamento: instante nao informado")
+	ErrValorZero         = errors.New("lancamento: valor nao pode ser zero")
+	ErrMeioInvalido      = errors.New("lancamento: meio de pagamento invalido")
+	ErrContraparteVazia  = errors.New("lancamento: contraparte vazia")
+	ErrContraparteLonga  = errors.New("lancamento: contraparte acima do limite")
+	ErrCategoriaInvalida = errors.New("lancamento: categoria invalida")
+	ErrOrigemDeCategoria = errors.New("lancamento: origem de categoria invalida")
+)
+
+// OrigemDaCategoria registra quem decidiu a categoria. Espelha o CHECK do
+// banco; "pendente" e o estado de quem ainda vai para a fila de pergunta.
+type OrigemDaCategoria string
+
+const (
+	CategoriaPendente  OrigemDaCategoria = "pendente"
+	CategoriaPorRegra  OrigemDaCategoria = "regra"
+	CategoriaManual    OrigemDaCategoria = "manual"
+	CategoriaImportada OrigemDaCategoria = "importacao"
 )
 
 // Lancamento e imutavel apos Novo: campos exportados para leitura e para o
@@ -58,7 +72,9 @@ type Lancamento struct {
 	Valor           dinheiro.Centavos // negativo = saida
 	Meio            Meio
 	Contraparte     string
-	ContraparteNorm string // forma canonica para regras e conciliacao
+	ContraparteNorm string            // forma canonica para regras e conciliacao
+	CategoriaID     categoria.ID      // zero = sem categoria
+	CategoriaOrigem OrigemDaCategoria // pendente enquanto CategoriaID for zero
 }
 
 // Dados e o que vem de fora para criar um lancamento. Struct em vez de seis
@@ -103,7 +119,26 @@ func Novo(id identidade.ID, d Dados, fuso *time.Location) (Lancamento, error) {
 		Meio:            meio,
 		Contraparte:     contraparte,
 		ContraparteNorm: Normalizar(contraparte),
+		CategoriaOrigem: CategoriaPendente,
 	}, nil
+}
+
+// ComCategoria devolve uma copia do lancamento com a categoria atribuida.
+// Copia, nao mutacao: o agregado continua imutavel apos criado, e o chamador
+// decide o que fazer com as duas versoes.
+func (l Lancamento) ComCategoria(id categoria.ID, origem OrigemDaCategoria) (Lancamento, error) {
+	if id <= 0 {
+		return Lancamento{}, ErrCategoriaInvalida
+	}
+	switch origem {
+	case CategoriaPorRegra, CategoriaManual, CategoriaImportada:
+	default:
+		// "pendente" com categoria preenchida seria estado contraditorio.
+		return Lancamento{}, ErrOrigemDeCategoria
+	}
+	l.CategoriaID = id
+	l.CategoriaOrigem = origem
+	return l, nil
 }
 
 // EhSaida informa se o dinheiro saiu (valor negativo).

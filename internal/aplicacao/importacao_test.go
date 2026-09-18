@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gracianFelipe/caixa/internal/dominio/categorizacao"
 	"github.com/gracianFelipe/caixa/internal/dominio/lancamento"
 	"github.com/gracianFelipe/caixa/internal/dominio/ocorrencia"
 )
@@ -51,7 +52,7 @@ func itemValido(payload string) ItemDeExtrato {
 
 func TestImportar(t *testing.T) {
 	repo := novoFakeDeOcorrencias()
-	s := NovoServicoDeImportacao(repo, relogioFixo(time.Now()), saoPaulo)
+	s := NovoServicoDeImportacao(repo, regrasFixas{}, relogioFixo(time.Now()), saoPaulo)
 	ctx := context.Background()
 
 	itens := []ItemDeExtrato{
@@ -92,7 +93,7 @@ func TestImportarErro(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("item invalido aborta com posicao", func(t *testing.T) {
-		s := NovoServicoDeImportacao(novoFakeDeOcorrencias(), relogioFixo(time.Now()), saoPaulo)
+		s := NovoServicoDeImportacao(novoFakeDeOcorrencias(), regrasFixas{}, relogioFixo(time.Now()), saoPaulo)
 		ruim := itemValido("bloco")
 		ruim.Contraparte = ""
 
@@ -109,7 +110,7 @@ func TestImportarErro(t *testing.T) {
 	t.Run("falha do repositorio interrompe", func(t *testing.T) {
 		repo := novoFakeDeOcorrencias()
 		repo.falha = errors.New("banco caiu")
-		s := NovoServicoDeImportacao(repo, relogioFixo(time.Now()), saoPaulo)
+		s := NovoServicoDeImportacao(repo, regrasFixas{}, relogioFixo(time.Now()), saoPaulo)
 
 		resumo, err := s.Importar(ctx, ocorrencia.OrigemExtratoOFX, []ItemDeExtrato{itemValido("x")})
 		if !errors.Is(err, repo.falha) {
@@ -121,10 +122,27 @@ func TestImportarErro(t *testing.T) {
 	})
 
 	t.Run("origem invalida", func(t *testing.T) {
-		s := NovoServicoDeImportacao(novoFakeDeOcorrencias(), relogioFixo(time.Now()), saoPaulo)
+		s := NovoServicoDeImportacao(novoFakeDeOcorrencias(), regrasFixas{}, relogioFixo(time.Now()), saoPaulo)
 		_, err := s.Importar(ctx, ocorrencia.Origem(99), []ItemDeExtrato{itemValido("x")})
 		if !errors.Is(err, ocorrencia.ErrOrigemInvalida) {
 			t.Fatalf("erro = %v, queria ErrOrigemInvalida", err)
 		}
 	})
+}
+
+func TestImportarClassifica(t *testing.T) {
+	repo := novoFakeDeOcorrencias()
+	regras := regrasFixas{regras: []categorizacao.Regra{
+		regraDeTeste(t, 3, 1, categorizacao.TipoContem, "SUPERMERCADO"),
+	}}
+	s := NovoServicoDeImportacao(repo, regras, relogioFixo(time.Now()), saoPaulo)
+
+	_, err := s.Importar(context.Background(), ocorrencia.OrigemExtratoOFX, []ItemDeExtrato{itemValido("bloco X")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	l := repo.lancamentos[0]
+	if l.CategoriaID != 1 || l.CategoriaOrigem != lancamento.CategoriaPorRegra {
+		t.Errorf("categoria = (%d, %s), queria (1, regra)", l.CategoriaID, l.CategoriaOrigem)
+	}
 }

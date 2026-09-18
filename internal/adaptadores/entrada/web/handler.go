@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/gracianFelipe/caixa/internal/dominio/categoria"
 	"github.com/gracianFelipe/caixa/internal/dominio/competencia"
 	"github.com/gracianFelipe/caixa/internal/dominio/dinheiro"
 	"github.com/gracianFelipe/caixa/internal/dominio/lancamento"
@@ -24,6 +25,12 @@ type Lancamentos interface {
 	Listar(ctx context.Context, c competencia.Competencia) ([]lancamento.Lancamento, error)
 }
 
+// Catalogo e a segunda interface deste consumidor: separada de Lancamentos
+// porque servicos diferentes a implementam, e o teste finge cada uma sozinha.
+type Catalogo interface {
+	Categorias(ctx context.Context) ([]categoria.Categoria, error)
+}
+
 // Um lancamento em JSON tem ~200 bytes; 64 KiB e folga, nao permissao.
 const corpoMaximo = 64 << 10
 
@@ -34,18 +41,20 @@ var (
 
 type servidor struct {
 	lancamentos Lancamentos
+	catalogo    Catalogo
 	log         *slog.Logger
 }
 
 // NovoHandler monta as rotas e devolve http.Handler, nao *ServeMux: quem
 // chama nao precisa saber como as rotas sao montadas.
-func NovoHandler(l Lancamentos, log *slog.Logger) http.Handler {
-	s := &servidor{lancamentos: l, log: log}
+func NovoHandler(l Lancamentos, c Catalogo, log *slog.Logger) http.Handler {
+	s := &servidor{lancamentos: l, catalogo: c, log: log}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /saude", s.saude)
 	mux.HandleFunc("POST /lancamentos", s.registrar)
 	mux.HandleFunc("GET /lancamentos", s.listar)
+	mux.HandleFunc("GET /categorias", s.categorias)
 
 	return registrarAcesso(log, mux)
 }
@@ -67,6 +76,14 @@ type respostaDeLancamento struct {
 	Valor         string    `json:"valor"`
 	Meio          string    `json:"meio"`
 	Contraparte   string    `json:"contraparte"`
+	// Ponteiro para o JSON dizer null quando pendente: 0 seria um id falso.
+	CategoriaID     *int16 `json:"categoria_id"`
+	CategoriaOrigem string `json:"categoria_origem"`
+}
+
+type respostaDeCategoria struct {
+	ID   int16  `json:"id"`
+	Nome string `json:"nome"`
 }
 
 type respostaDeErro struct {
@@ -74,15 +91,21 @@ type respostaDeErro struct {
 }
 
 func paraResposta(l lancamento.Lancamento) respostaDeLancamento {
-	return respostaDeLancamento{
-		ID:            l.ID.String(),
-		OcorridoEm:    l.OcorridoEm,
-		Competencia:   l.Competencia.String(),
-		ValorCentavos: int64(l.Valor),
-		Valor:         l.Valor.String(),
-		Meio:          string(l.Meio),
-		Contraparte:   l.Contraparte,
+	r := respostaDeLancamento{
+		ID:              l.ID.String(),
+		OcorridoEm:      l.OcorridoEm,
+		Competencia:     l.Competencia.String(),
+		ValorCentavos:   int64(l.Valor),
+		Valor:           l.Valor.String(),
+		Meio:            string(l.Meio),
+		Contraparte:     l.Contraparte,
+		CategoriaOrigem: string(l.CategoriaOrigem),
 	}
+	if l.CategoriaID > 0 {
+		id := int16(l.CategoriaID)
+		r.CategoriaID = &id
+	}
+	return r
 }
 
 func (s *servidor) saude(w http.ResponseWriter, _ *http.Request) {
@@ -128,6 +151,20 @@ func (s *servidor) listar(w http.ResponseWriter, r *http.Request) {
 	resposta := make([]respostaDeLancamento, 0, len(ls))
 	for _, l := range ls {
 		resposta = append(resposta, paraResposta(l))
+	}
+	responderJSON(w, http.StatusOK, resposta)
+}
+
+func (s *servidor) categorias(w http.ResponseWriter, r *http.Request) {
+	categorias, err := s.catalogo.Categorias(r.Context())
+	if err != nil {
+		s.responderErro(w, r, err)
+		return
+	}
+
+	resposta := make([]respostaDeCategoria, 0, len(categorias))
+	for _, c := range categorias {
+		resposta = append(resposta, respostaDeCategoria{ID: int16(c.ID), Nome: c.Nome})
 	}
 	responderJSON(w, http.StatusOK, resposta)
 }

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/gracianFelipe/caixa/internal/dominio/categorizacao"
 	"github.com/gracianFelipe/caixa/internal/dominio/dinheiro"
 	"github.com/gracianFelipe/caixa/internal/dominio/identidade"
 	"github.com/gracianFelipe/caixa/internal/dominio/lancamento"
@@ -35,12 +36,13 @@ type ResumoDaImportacao struct {
 // Importacao e o caso de uso de carregar evidencias externas no sistema.
 type Importacao struct {
 	ocorrencias RepositorioDeOcorrencias
+	regras      RepositorioDeRegras
 	relogio     Relogio
 	fuso        *time.Location
 }
 
-func NovoServicoDeImportacao(o RepositorioDeOcorrencias, relogio Relogio, fuso *time.Location) *Importacao {
-	return &Importacao{ocorrencias: o, relogio: relogio, fuso: fuso}
+func NovoServicoDeImportacao(o RepositorioDeOcorrencias, regras RepositorioDeRegras, relogio Relogio, fuso *time.Location) *Importacao {
+	return &Importacao{ocorrencias: o, regras: regras, relogio: relogio, fuso: fuso}
 }
 
 // Importar grava cada item como ocorrencia + lancamento. Item de valor zero e
@@ -49,6 +51,12 @@ func NovoServicoDeImportacao(o RepositorioDeOcorrencias, relogio Relogio, fuso *
 // logica aqui — importar o mesmo arquivo duas vezes e operacao segura.
 func (s *Importacao) Importar(ctx context.Context, origem ocorrencia.Origem, itens []ItemDeExtrato) (ResumoDaImportacao, error) {
 	var resumo ResumoDaImportacao
+
+	// Uma carga de regras por lote, nao por item: o lote e atomico no tempo.
+	regras, err := s.regras.Ativas(ctx)
+	if err != nil {
+		return resumo, fmt.Errorf("carregando regras: %w", err)
+	}
 
 	for i, item := range itens {
 		if item.Valor == 0 {
@@ -77,6 +85,15 @@ func (s *Importacao) Importar(ctx context.Context, origem ocorrencia.Origem, ite
 		}, s.fuso)
 		if err != nil {
 			return resumo, fmt.Errorf("item %d: %w", i+1, err)
+		}
+
+		// Classificacao por regra tambem na importacao; origem continua
+		// "regra" (a origem "importacao" fica para fonte que ja traga a
+		// categoria dela, ex. CSV com coluna propria).
+		if resultado, ok := categorizacao.Classificar(l.ContraparteNorm, regras); ok {
+			if l, err = l.ComCategoria(resultado.Categoria, lancamento.CategoriaPorRegra); err != nil {
+				return resumo, fmt.Errorf("item %d: %w", i+1, err)
+			}
 		}
 
 		criada, err := s.ocorrencias.CriarComLancamento(ctx, o, l)

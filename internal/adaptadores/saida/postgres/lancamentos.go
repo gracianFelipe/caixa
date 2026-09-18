@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/gracianFelipe/caixa/internal/aplicacao"
+	"github.com/gracianFelipe/caixa/internal/dominio/categoria"
 	"github.com/gracianFelipe/caixa/internal/dominio/competencia"
 	"github.com/gracianFelipe/caixa/internal/dominio/dinheiro"
 	"github.com/gracianFelipe/caixa/internal/dominio/identidade"
@@ -47,14 +48,29 @@ func NovoRepositorio(pool *pgxpool.Pool) *Repositorio {
 
 const sqlInserir = `
 INSERT INTO lancamentos
-    (id, ocorrido_em, competencia, valor_centavos, meio, contraparte, contraparte_norm)
+    (id, ocorrido_em, competencia, valor_centavos, meio, contraparte, contraparte_norm, categoria_id, categoria_origem)
 VALUES
-    ($1, $2, $3, $4, $5, $6, $7)`
+    ($1, $2, $3, $4, $5, $6, $7, $8, $9)`
 
 // Salvar grava um lancamento novo. Conversoes explicitas para os tipos base
 // (int64, string): o dominio nao precisa saber como o pgx codifica.
 func (r *Repositorio) Salvar(ctx context.Context, l lancamento.Lancamento) error {
-	_, err := r.pool.Exec(ctx, sqlInserir,
+	_, err := r.pool.Exec(ctx, sqlInserir, argumentosDeInsercao(l)...)
+	if err != nil {
+		return fmt.Errorf("inserindo lancamento: %w", err)
+	}
+	return nil
+}
+
+// argumentosDeInsercao existe porque duas queries inserem lancamento (Salvar
+// e a importacao com ocorrencia); a lista de colunas muda junto nos dois.
+func argumentosDeInsercao(l lancamento.Lancamento) []any {
+	var categoriaID *int16
+	if l.CategoriaID > 0 {
+		v := int16(l.CategoriaID)
+		categoriaID = &v // NULL no banco quando pendente; zero violaria a FK
+	}
+	return []any{
 		l.ID,
 		l.OcorridoEm,
 		l.Competencia.PrimeiroDia(),
@@ -62,15 +78,13 @@ func (r *Repositorio) Salvar(ctx context.Context, l lancamento.Lancamento) error
 		string(l.Meio),
 		l.Contraparte,
 		l.ContraparteNorm,
-	)
-	if err != nil {
-		return fmt.Errorf("inserindo lancamento: %w", err)
+		categoriaID,
+		string(l.CategoriaOrigem),
 	}
-	return nil
 }
 
 const sqlDaCompetencia = `
-SELECT id, ocorrido_em, competencia, valor_centavos, meio, contraparte, contraparte_norm
+SELECT id, ocorrido_em, competencia, valor_centavos, meio, contraparte, contraparte_norm, categoria_id, categoria_origem
 FROM lancamentos
 WHERE competencia = $1
 ORDER BY ocorrido_em, id`
@@ -99,8 +113,10 @@ func lerLancamento(row pgx.CollectableRow) (lancamento.Lancamento, error) {
 		meio            string
 		contraparte     string
 		contraparteNorm string
+		categoriaID     *int16
+		categoriaOrigem string
 	)
-	if err := row.Scan(&id, &ocorridoEm, &primeiroDia, &valor, &meio, &contraparte, &contraparteNorm); err != nil {
+	if err := row.Scan(&id, &ocorridoEm, &primeiroDia, &valor, &meio, &contraparte, &contraparteNorm, &categoriaID, &categoriaOrigem); err != nil {
 		return lancamento.Lancamento{}, fmt.Errorf("lendo lancamento: %w", err)
 	}
 
@@ -110,7 +126,7 @@ func lerLancamento(row pgx.CollectableRow) (lancamento.Lancamento, error) {
 		return lancamento.Lancamento{}, fmt.Errorf("lendo competencia do lancamento %s: %w", id, err)
 	}
 
-	return lancamento.Lancamento{
+	l := lancamento.Lancamento{
 		ID:              id,
 		OcorridoEm:      ocorridoEm.UTC(),
 		Competencia:     comp,
@@ -118,5 +134,10 @@ func lerLancamento(row pgx.CollectableRow) (lancamento.Lancamento, error) {
 		Meio:            lancamento.Meio(meio),
 		Contraparte:     contraparte,
 		ContraparteNorm: contraparteNorm,
-	}, nil
+		CategoriaOrigem: lancamento.OrigemDaCategoria(categoriaOrigem),
+	}
+	if categoriaID != nil {
+		l.CategoriaID = categoria.ID(*categoriaID)
+	}
+	return l, nil
 }

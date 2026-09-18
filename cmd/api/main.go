@@ -72,13 +72,15 @@ func executar(ctx context.Context, log *slog.Logger) error {
 
 	lancamentos := aplicacao.NovoServicoDeLancamentos(
 		postgres.NovoRepositorio(pool),
+		postgres.NovoRepositorioDeRegras(pool),
 		relogio.Sistema{},
 		fuso,
 	)
+	catalogo := aplicacao.NovoCatalogo(postgres.NovoRepositorioDeCategorias(pool))
 
 	servidor := &http.Server{
 		Addr:              cfg.httpEndereco,
-		Handler:           web.NovoHandler(lancamentos, log),
+		Handler:           web.NovoHandler(lancamentos, catalogo, log),
 		ReadHeaderTimeout: 5 * time.Second, // fecha conexao que abre e nao manda cabecalho (slowloris)
 		ReadTimeout:       10 * time.Second,
 		WriteTimeout:      10 * time.Second,

@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gracianFelipe/caixa/internal/dominio/categoria"
 	"github.com/gracianFelipe/caixa/internal/dominio/competencia"
 	"github.com/gracianFelipe/caixa/internal/dominio/identidade"
 	"github.com/gracianFelipe/caixa/internal/dominio/lancamento"
@@ -42,6 +43,16 @@ func (f *servicoFalso) Listar(context.Context, competencia.Competencia) ([]lanca
 		return nil, f.erro
 	}
 	return f.listados, nil
+}
+
+// catalogoFalso implementa Catalogo sem banco.
+type catalogoFalso struct {
+	categorias []categoria.Categoria
+	erro       error
+}
+
+func (f catalogoFalso) Categorias(context.Context) ([]categoria.Categoria, error) {
+	return f.categorias, f.erro
 }
 
 func logSilencioso() *slog.Logger {
@@ -74,7 +85,7 @@ func TestRegistrar(t *testing.T) {
 	for _, c := range casos {
 		t.Run(c.nome, func(t *testing.T) {
 			servico := &servicoFalso{erro: c.erro}
-			h := NovoHandler(servico, logSilencioso())
+			h := NovoHandler(servico, catalogoFalso{}, logSilencioso())
 
 			req := httptest.NewRequest(http.MethodPost, "/lancamentos", strings.NewReader(c.corpo))
 			rec := httptest.NewRecorder()
@@ -95,7 +106,7 @@ func TestRegistrar(t *testing.T) {
 
 func TestRegistrarRespostaCompleta(t *testing.T) {
 	servico := &servicoFalso{}
-	h := NovoHandler(servico, logSilencioso())
+	h := NovoHandler(servico, catalogoFalso{}, logSilencioso())
 
 	req := httptest.NewRequest(http.MethodPost, "/lancamentos", strings.NewReader(corpoValido))
 	rec := httptest.NewRecorder()
@@ -114,6 +125,9 @@ func TestRegistrarRespostaCompleta(t *testing.T) {
 	}
 	if resp.ValorCentavos != -4790 || resp.Valor != "-R$ 47,90" {
 		t.Errorf("valor = (%d, %q), queria (-4790, \"-R$ 47,90\")", resp.ValorCentavos, resp.Valor)
+	}
+	if resp.CategoriaID != nil || resp.CategoriaOrigem != "pendente" {
+		t.Errorf("categoria = (%v, %q), queria (null, pendente)", resp.CategoriaID, resp.CategoriaOrigem)
 	}
 	if servico.recebido.Contraparte != "SUPERMERCADO XYZ" {
 		t.Errorf("servico recebeu contraparte %q", servico.recebido.Contraparte)
@@ -144,7 +158,7 @@ func TestListar(t *testing.T) {
 
 	for _, c := range casos {
 		t.Run(c.nome, func(t *testing.T) {
-			h := NovoHandler(c.servico, logSilencioso())
+			h := NovoHandler(c.servico, catalogoFalso{}, logSilencioso())
 
 			req := httptest.NewRequest(http.MethodGet, "/lancamentos"+c.consulta, nil)
 			rec := httptest.NewRecorder()
@@ -161,7 +175,7 @@ func TestListar(t *testing.T) {
 }
 
 func TestRotas(t *testing.T) {
-	h := NovoHandler(&servicoFalso{}, logSilencioso())
+	h := NovoHandler(&servicoFalso{}, catalogoFalso{}, logSilencioso())
 
 	casos := []struct {
 		metodo string
@@ -190,7 +204,7 @@ func TestRotas(t *testing.T) {
 func TestLogNaoVazaPII(t *testing.T) {
 	var saida bytes.Buffer
 	log := slog.New(slog.NewJSONHandler(&saida, nil))
-	h := NovoHandler(&servicoFalso{erro: errors.New("banco caiu")}, log)
+	h := NovoHandler(&servicoFalso{erro: errors.New("banco caiu")}, catalogoFalso{}, log)
 
 	corpo := `{"valor_centavos":-987654,"meio":"pix","contraparte":"CLINICA SIGILOSA","ocorrido_em":"2026-09-17T15:00:00Z"}`
 	rec := httptest.NewRecorder()
@@ -207,4 +221,39 @@ func TestLogNaoVazaPII(t *testing.T) {
 	if !strings.Contains(saida.String(), "banco caiu") {
 		t.Error("o detalhe do erro interno deveria estar no log do servidor")
 	}
+}
+
+func TestCategorias(t *testing.T) {
+	t.Run("lista", func(t *testing.T) {
+		mercado, _ := categoria.Nova(1, "mercado")
+		h := NovoHandler(&servicoFalso{}, catalogoFalso{categorias: []categoria.Categoria{mercado}}, logSilencioso())
+
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/categorias", nil))
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status = %d", rec.Code)
+		}
+		if corpo := rec.Body.String(); !strings.HasPrefix(corpo, `[{"id":1,"nome":"mercado"}`) {
+			t.Errorf("corpo = %s", corpo)
+		}
+	})
+
+	t.Run("vazia devolve lista, nao null", func(t *testing.T) {
+		h := NovoHandler(&servicoFalso{}, catalogoFalso{}, logSilencioso())
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/categorias", nil))
+		if !strings.HasPrefix(rec.Body.String(), "[]") {
+			t.Errorf("corpo = %s", rec.Body)
+		}
+	})
+
+	t.Run("erro vira 500 generico", func(t *testing.T) {
+		h := NovoHandler(&servicoFalso{}, catalogoFalso{erro: errors.New("sem banco")}, logSilencioso())
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/categorias", nil))
+		if rec.Code != http.StatusInternalServerError || strings.Contains(rec.Body.String(), "sem banco") {
+			t.Errorf("status = %d, corpo = %s", rec.Code, rec.Body)
+		}
+	})
 }

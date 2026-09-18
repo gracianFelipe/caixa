@@ -23,8 +23,13 @@ numa entrevista técnica. Os contratos que o código obedece estão em
   lançamento (fato); reimportar é seguro por constraint, não por lógica.
   *Pendente: validar contra OFX real do Bradesco.*
 
-Próximo: categorização por regras, Dockerfile, Telegram, conciliação,
-relatório com cinco detectores, PWA embutido, deploy.
+* **004** — categorias fixas + categorização determinística por regras
+  (precedência total: prioridade → exata>prefixo>contem>regex → tamanho → id;
+  teste embaralha as regras e prova determinismo). Todo lançamento novo é
+  classificado na entrada; sem regra, fica `pendente` para a fila do Telegram.
+
+Próximo: Dockerfile, Telegram, conciliação, relatório com cinco detectores,
+PWA embutido, deploy.
 
 ## Arquitetura em uma frase
 
@@ -74,6 +79,7 @@ Endpoints:
 | `GET` | `/saude` | liveness |
 | `POST` | `/lancamentos` | registra um lançamento |
 | `GET` | `/lancamentos?competencia=AAAA-MM` | lista o mês |
+| `GET` | `/categorias` | vocabulário fixo de categorias |
 
 ```powershell
 # no PowerShell, mande JSON por arquivo: aspas escapadas na linha de comando quebram

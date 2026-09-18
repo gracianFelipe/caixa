@@ -4,6 +4,8 @@ import (
 	"context"
 	"time"
 
+	"github.com/gracianFelipe/caixa/internal/dominio/categoria"
+	"github.com/gracianFelipe/caixa/internal/dominio/categorizacao"
 	"github.com/gracianFelipe/caixa/internal/dominio/competencia"
 	"github.com/gracianFelipe/caixa/internal/dominio/lancamento"
 	"github.com/gracianFelipe/caixa/internal/dominio/ocorrencia"
@@ -26,6 +28,17 @@ type RepositorioDeLancamentos interface {
 // repetidos) — a idempotencia mora na constraint, nao em logica de consulta.
 type RepositorioDeOcorrencias interface {
 	CriarComLancamento(ctx context.Context, o ocorrencia.Ocorrencia, l lancamento.Lancamento) (criada bool, err error)
+}
+
+// RepositorioDeRegras entrega as regras ativas de categorizacao. A ordenacao
+// e problema do dominio (Classificar), nao da consulta.
+type RepositorioDeRegras interface {
+	Ativas(ctx context.Context) ([]categorizacao.Regra, error)
+}
+
+// RepositorioDeCategorias lista o vocabulario fixo de categorias.
+type RepositorioDeCategorias interface {
+	Listar(ctx context.Context) ([]categoria.Categoria, error)
 }
 
 // Relogio abstrai time.Now para que o caso de uso seja testavel com tempo fixo.
