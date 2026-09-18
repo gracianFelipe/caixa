@@ -6,6 +6,7 @@ import (
 
 	"github.com/gracianFelipe/caixa/internal/dominio/competencia"
 	"github.com/gracianFelipe/caixa/internal/dominio/lancamento"
+	"github.com/gracianFelipe/caixa/internal/dominio/ocorrencia"
 )
 
 // As interfaces moram aqui, no consumidor, e nao em quem implementa.
@@ -18,6 +19,13 @@ import (
 type RepositorioDeLancamentos interface {
 	Salvar(ctx context.Context, l lancamento.Lancamento) error
 	DaCompetencia(ctx context.Context, c competencia.Competencia) ([]lancamento.Lancamento, error)
+}
+
+// RepositorioDeOcorrencias grava a evidencia e o fato na mesma transacao.
+// Devolve false quando a ocorrencia ja existia (impressao ou id externo
+// repetidos) — a idempotencia mora na constraint, nao em logica de consulta.
+type RepositorioDeOcorrencias interface {
+	CriarComLancamento(ctx context.Context, o ocorrencia.Ocorrencia, l lancamento.Lancamento) (criada bool, err error)
 }
 
 // Relogio abstrai time.Now para que o caso de uso seja testavel com tempo fixo.

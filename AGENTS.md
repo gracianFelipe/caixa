@@ -144,7 +144,11 @@ Default section order:
 * Senhas e tokens: o autor digita no próprio terminal. O agente nunca pede,
   recebe, exibe ou grava credencial — nem em arquivo gitignored.
 * Uma spec por vez; o autor lê cada diff antes do commit. Commit e push só
-  com pedido explícito.
+  com pedido explícito. **Exceção vigente:** em 2026-09-17 o autor autorizou
+  execução contínua das specs 003 em diante ("siga até finalizar todo o
+  projeto"), com commit+push por spec concluída e leitura a posteriori; cada
+  spec arquivada deve carregar as decisões e o porquê, como material de
+  estudo. O front (Fase 6) usa a skill ui-ux-pro-max, por pedido do autor.
 * Decisões operacionais seguem o plano sem renegociar (ex.: Docker não subiu
   no prazo do Dia 1 → Postgres nativo, sem gastar o dia).
 
@@ -166,10 +170,12 @@ roda tudo isso com `-race`, um Postgres 17 de serviço, `govulncheck` e Gitleaks
 * `internal/dominio/AGENTS.md` — contratos locais do domínio puro (só stdlib,
   tempo/fuso/aleatoriedade por parâmetro, construtores, sentinelas) e o
   padrão de teste dos pacotes `dinheiro`, `competencia`, `identidade`,
-  `lancamento`.
+  `lancamento`, `ocorrencia`.
 
 Fica na raiz: `internal/aplicacao` (casos de uso + `portas.go`),
-`internal/adaptadores/{entrada/web, saida/postgres, saida/relogio}`,
+`internal/adaptadores/{entrada/web, entrada/extrato, saida/postgres, saida/relogio}`
+(`extrato` é o tokenizador OFX próprio — SGML, Windows-1252, dinheiro sem
+float; heurística de meio ajustável com dados reais),
 `cmd/api`, `cmd/caixactl` (subcomandos por `flag.NewFlagSet`; hoje `migrar`),
 `migracoes/` (SQLs + pacote `migracoes` com `go:embed`; migrador próprio em
 `saida/postgres/migrador.go` — decisão na spec 002, sem goose), `deploy/`,

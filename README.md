@@ -12,11 +12,18 @@ numa entrevista técnica. Os contratos que o código obedece estão em
 
 ## Estado
 
-**Fase 1 concluída** — a espinha vertical: um lançamento entra por HTTP,
-atravessa domínio e aplicação, é gravado no Postgres e volta numa consulta por
-competência. Spec em [`.specs/archive/001-fundacao-lancamento/`](.specs/archive/001-fundacao-lancamento/spec.md).
+**Fase 2 em andamento.** Concluído até aqui (specs em [`.specs/archive/`](.specs/archive/)):
 
-Próximas fases: importador OFX, categorização por regras, Telegram, conciliação,
+* **001** — espinha vertical: lançamento entra por HTTP, atravessa domínio e
+  aplicação, grava no Postgres, volta por competência.
+* **002** — migrações embutidas (`go:embed`) e migrador próprio idempotente
+  (`caixactl migrar`), sem goose — decisão registrada na spec.
+* **003** — tokenizador OFX próprio (SGML, Windows-1252, dinheiro sem float,
+  fuzz) e `caixactl importar`: linha de extrato vira ocorrência (evidência) +
+  lançamento (fato); reimportar é seguro por constraint, não por lógica.
+  *Pendente: validar contra OFX real do Bradesco.*
+
+Próximo: categorização por regras, Dockerfile, Telegram, conciliação,
 relatório com cinco detectores, PWA embutido, deploy.
 
 ## Arquitetura em uma frase
