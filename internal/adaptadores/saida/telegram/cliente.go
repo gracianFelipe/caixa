@@ -169,7 +169,8 @@ func (c *Cliente) chamar(ctx context.Context, metodo string, corpo any, destino 
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.base+"/"+metodo, bytes.NewReader(dados))
 	if err != nil {
-		return fmt.Errorf("telegram %s: %w", metodo, err)
+		// O erro de parse de URL ecoa a URL — que carrega o token. Nao sobe.
+		return fmt.Errorf("telegram %s: montando requisicao invalida", metodo)
 	}
 	req.Header.Set("Content-Type", "application/json")
 

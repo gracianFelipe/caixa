@@ -1,0 +1,130 @@
+/* Tela Lançamentos: filtro segmentado, grupos por dia, item com badges e
+   seletor de categoria inline. Só tokens de app.css. */
+
+.filtro-segmentado {
+  display: flex;
+  gap: var(--espaco-1);
+  padding: var(--espaco-1);
+  background: var(--cor-superficie-2);
+  border-radius: var(--raio-p);
+  margin-bottom: var(--espaco-4);
+}
+
+.filtro-segmentado__botao {
+  flex: 1;
+  min-height: 44px;
+  border: 0;
+  border-radius: calc(var(--raio-p) - 2px);
+  background: none;
+  color: var(--cor-texto-fraco);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background var(--duracao), color var(--duracao);
+}
+
+.filtro-segmentado__botao[aria-pressed="true"] {
+  background: var(--cor-superficie);
+  color: var(--cor-texto);
+  box-shadow: var(--sombra-1);
+}
+
+.filtro-segmentado__contagem {
+  margin-left: var(--espaco-1);
+  color: var(--cor-texto-fraco);
+  font-variant-numeric: tabular-nums;
+}
+
+.lancamentos__dia {
+  margin: var(--espaco-5) 0 var(--espaco-2);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--cor-texto-fraco);
+  text-transform: lowercase;
+}
+
+.lancamentos__item {
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--espaco-2);
+}
+
+.lancamentos__principal {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--espaco-3);
+  width: 100%;
+}
+
+.lancamentos__corpo { flex: 1; min-width: 0; }
+
+.lancamentos__contraparte {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+.lancamentos__linha {
+  display: flex;
+  align-items: center;
+  gap: var(--espaco-2);
+  font-size: 13px;
+  color: var(--cor-texto-fraco);
+}
+
+.lancamentos__badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--espaco-1);
+}
+
+.lancamentos__categoria {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--espaco-1);
+  min-height: 32px;
+  padding: 0 var(--espaco-2);
+  border: 1px solid var(--cor-borda);
+  border-radius: 999px;
+  background: none;
+  color: var(--cor-texto-fraco);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.lancamentos__categoria--sem { border-color: var(--cor-aviso); color: var(--cor-aviso); }
+.lancamentos__categoria--provisorio { border-color: var(--cor-primaria); color: var(--cor-primaria); }
+
+.lancamentos__item--descartado .lancamentos__contraparte,
+.lancamentos__item--descartado .valor {
+  text-decoration: line-through;
+  opacity: 0.5;
+}
+
+.lancamentos__icone svg { width: 16px; height: 16px; display: block; }
+
+.lancamentos__seletor {
+  padding: var(--espaco-2);
+  background: var(--cor-superficie-2);
+  border-radius: var(--raio-p);
+}
+
+.lancamentos__opcoes {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: var(--espaco-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.lancamentos__opcoes .botao { width: 100%; justify-content: flex-start; }
+
+.lancamentos__seletor-rodape {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: var(--espaco-2);
+}

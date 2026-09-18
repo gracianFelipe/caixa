@@ -112,6 +112,11 @@ func (r *perguntasEmMemoria) AbertaDoLancamento(_ context.Context, lancamentoID 
 
 func (r *perguntasEmMemoria) MarcarRespondida(_ context.Context, lancamentoID identidade.ID) error {
 	r.respondidas = append(r.respondidas, lancamentoID)
+	for i := range r.criadas {
+		if r.criadas[i].LancamentoID == lancamentoID && r.criadas[i].Estado == pergunta.Aberta {
+			r.criadas[i].Estado = pergunta.Respondida
+		}
+	}
 	return nil
 }
 
@@ -169,6 +174,11 @@ func (a *alertasEmMemoria) RegistrarSeNovo(_ context.Context, tipo, chave string
 	}
 	a.emitidos[completa] = true
 	return true, nil
+}
+
+func (a *alertasEmMemoria) Remover(_ context.Context, tipo, chave string) error {
+	delete(a.emitidos, tipo+"|"+chave)
+	return nil
 }
 
 type mensageiroFalso struct {

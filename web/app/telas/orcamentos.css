@@ -1,0 +1,291 @@
+/* Tela de orçamentos. Só tokens de app.css; nenhum hex solto. */
+
+.orcamentos {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-4);
+}
+
+/* Resumo no topo */
+.orcamentos__resumo-valor {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--espaco-2);
+  margin: var(--espaco-1) 0 0;
+}
+
+.orcamentos__resumo-texto {
+  margin: var(--espaco-2) 0 0;
+  color: var(--cor-texto-fraco);
+  font-size: 14px;
+}
+
+/* Lista */
+.orcamentos__lista {
+  background: var(--cor-superficie);
+  border: 1px solid var(--cor-borda);
+  border-radius: var(--raio);
+  padding: 0 var(--espaco-4);
+  margin: 0;
+  list-style: none;
+}
+
+.orcamento {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--espaco-2);
+  padding: var(--espaco-3) 0;
+}
+
+.orcamento:last-child {
+  border-bottom: 0;
+}
+
+.orcamento__cabecalho {
+  display: flex;
+  align-items: center;
+  gap: var(--espaco-2);
+  min-height: 44px;
+}
+
+.orcamento__nome {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 16px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.orcamento__chip {
+  flex: 0 0 auto;
+  padding: 2px var(--espaco-2);
+  border: 1px solid var(--cor-borda);
+  border-radius: 999px;
+  background: var(--cor-superficie-2);
+  color: var(--cor-texto-fraco);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.orcamento__editar {
+  flex: 0 0 auto;
+  min-width: 44px;
+  width: 44px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.orcamento__editar .icone,
+.orcamento__sinal .icone {
+  display: inline-flex;
+  width: 20px;
+  height: 20px;
+}
+
+.orcamento__editar .icone svg,
+.orcamento__sinal .icone svg {
+  width: 100%;
+  height: 100%;
+}
+
+.orcamento__sinal .icone {
+  width: 16px;
+  height: 16px;
+}
+
+/* Barra: cor muda com o estado da linha, nunca só a cor sinaliza (há chip com texto). */
+.orcamento__barra .barra__preenchido {
+  background: var(--cor-primaria);
+}
+
+.orcamento--aviso .orcamento__barra .barra__preenchido {
+  background: var(--cor-aviso);
+}
+
+.orcamento--perigo .orcamento__barra .barra__preenchido {
+  background: var(--cor-perigo);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .orcamento__barra .barra__preenchido {
+    transition: width var(--duracao) ease, background-color var(--duracao) ease;
+  }
+}
+
+.orcamento__rodape {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--espaco-3);
+  font-size: 14px;
+  color: var(--cor-texto-fraco);
+}
+
+.orcamento__texto {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.orcamento__texto .valor {
+  font-size: 14px;
+}
+
+.orcamento__limite {
+  color: var(--cor-texto);
+}
+
+.orcamento__pct {
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--cor-texto);
+}
+
+.orcamento--aviso .orcamento__pct {
+  color: var(--cor-aviso);
+}
+
+.orcamento--perigo .orcamento__pct {
+  color: var(--cor-perigo);
+}
+
+.orcamento__sinal {
+  align-self: flex-start;
+}
+
+/* Formulário inline */
+.orcamento__form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-3);
+  margin-top: var(--espaco-2);
+  padding: var(--espaco-4);
+  border: 1px solid var(--cor-borda);
+  border-radius: var(--raio-p);
+  background: var(--cor-superficie-2);
+}
+
+.orcamento--editando {
+  padding-bottom: var(--espaco-4);
+}
+
+.orcamento__escopo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-1);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.orcamento__escopo legend {
+  padding: 0;
+  margin-bottom: var(--espaco-1);
+}
+
+.orcamento__opcao {
+  display: flex;
+  align-items: center;
+  gap: var(--espaco-3);
+  min-height: 44px;
+  padding: 0 var(--espaco-2);
+  border-radius: var(--raio-p);
+  cursor: pointer;
+  font-size: 16px;
+}
+
+.orcamento__opcao:hover {
+  background: var(--cor-superficie);
+}
+
+.orcamento__opcao input[type="radio"] {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  accent-color: var(--cor-primaria);
+  cursor: pointer;
+}
+
+.orcamento__opcao input[type="radio"]:focus-visible {
+  outline: 2px solid var(--cor-primaria);
+  outline-offset: 2px;
+}
+
+.orcamento__acoes {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--espaco-2);
+  flex-wrap: wrap;
+}
+
+.orcamento__acoes .botao {
+  flex: 1 1 auto;
+}
+
+@media (min-width: 480px) {
+  .orcamento__acoes .botao {
+    flex: 0 0 auto;
+    min-width: 120px;
+  }
+}
+
+/* Esqueleto */
+.orcamento--esqueleto {
+  gap: var(--espaco-3);
+}
+
+.orcamento__esq-nome {
+  width: 45%;
+  height: 18px;
+  border-radius: var(--raio-p);
+}
+
+.orcamento__esq-barra {
+  width: 100%;
+  height: 8px;
+  border-radius: 999px;
+}
+
+.orcamento__esq-texto {
+  width: 60%;
+  height: 14px;
+  border-radius: var(--raio-p);
+}
+
+/* Desktop: duas colunas no resumo + lista mais larga */
+@media (min-width: 768px) {
+  .orcamento {
+    padding: var(--espaco-4) 0;
+  }
+
+  .orcamento__form {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-areas:
+      "campo escopo"
+      "acoes acoes";
+    column-gap: var(--espaco-5);
+  }
+
+  .orcamento__form .campo {
+    grid-area: campo;
+  }
+
+  .orcamento__escopo {
+    grid-area: escopo;
+  }
+
+  .orcamento__acoes {
+    grid-area: acoes;
+  }
+}

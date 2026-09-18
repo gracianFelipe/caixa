@@ -32,15 +32,23 @@ func Do(instante time.Time, fuso *time.Location) Competencia {
 	return Competencia{ano: local.Year(), mes: local.Month()}
 }
 
-// Analisar le o formato "AAAA-MM", o mesmo usado na URL e no JSON.
+// Analisar le o formato "AAAA-MM", o mesmo usado na URL e no JSON. Digitos
+// verificados a mao: Sscanf aceitaria sinal e espaco ("+026-09") e quebraria
+// a ida e volta com String.
 func Analisar(texto string) (Competencia, error) {
 	if len(texto) != 7 || texto[4] != '-' {
 		return Competencia{}, ErrFormato
 	}
-	var ano, mes int
-	if _, err := fmt.Sscanf(texto, "%4d-%2d", &ano, &mes); err != nil {
-		return Competencia{}, ErrFormato
+	for i, r := range texto {
+		if i == 4 {
+			continue
+		}
+		if r < '0' || r > '9' {
+			return Competencia{}, ErrFormato
+		}
 	}
+	ano := int(texto[0]-'0')*1000 + int(texto[1]-'0')*100 + int(texto[2]-'0')*10 + int(texto[3]-'0')
+	mes := int(texto[5]-'0')*10 + int(texto[6]-'0')
 	return Nova(ano, time.Month(mes))
 }
 

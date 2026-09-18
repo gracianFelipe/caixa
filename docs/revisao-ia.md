@@ -65,6 +65,42 @@ errado**, **como foi pego**, **o que entrou no lugar**.
   ferramenta expõe o critério (`.Standard`), usar o critério, não uma
   aproximação textual dele.
 
+## 004 — Auditoria multiagente: 36 suspeitas, triagem manual, 12 correções
+
+* **Onde:** repo inteiro (spec 010).
+* **O que aconteceu:** uma revisão com 7 agentes-lente levantou 36 suspeitas;
+  a fase de verificação adversarial caiu por limite de sessão, então a
+  triagem foi manual. Aproximadamente um terço era real e virou correção:
+  `defer conn.Hijack().Close(...)` avaliava o Hijack na hora do defer e
+  sequestrava a conexão antes do LISTEN (pego também no smoke: panic);
+  UNIQUE total de perguntas impedia a segunda pergunta legítima do mesmo
+  lançamento (migração 007: índice parcial em `estado='aberta'`); alerta e
+  relatório registravam a idempotência ANTES do envio (falha transitória
+  perderia o aviso para sempre — agora há compensação com `Remover`);
+  callback reentregue agia sobre pergunta já respondida; evento envenenado
+  travava a fila (tentativas + corte em 5); `Sscanf` aceitava sinal em
+  "AAAA-MM"; regex de regra era sensível a caixa contra texto maiúsculo;
+  MAD zero marcava gasto normal como atípico; truncamento de 24h quebrava a
+  assinatura em fevereiro (arredonda agora); "TED" casava dentro de
+  LIMITED (palavra inteira agora); erro de `http.NewRequest` ecoava a URL
+  com o token; API escutava em todas as interfaces por padrão (loopback
+  agora). O restante era falso positivo ou preferência sem consequência.
+* **Lição:** gerador e revisor erram nos mesmos lugares que humanos —
+  fronteiras, defer, idempotência. A triagem humana continua sendo o filtro.
+
+## 005 — Front vanilla no lugar do Next.js do plano
+
+* **Onde:** `web/app` (spec 010).
+* **O que o plano (gerado por IA) previa:** PWA Next.js `output: 'export'`.
+* **Por que foi rejeitado:** a vaga é backend; React/Next já está no
+  currículo do autor; o export do Next arrastaria Node para o repo, o
+  Dockerfile e a CI. HTML+CSS+JS a mão mantém `go build` como única
+  toolchain e cada linha do front tão explicável quanto as do back. O
+  design veio da skill ui-ux-pro-max com overrides registrados no
+  MASTER.md (fonte de sistema, sem CDN — o gerador sugeria Google Fonts e
+  tipografia de landing page, rejeitados: app financeiro offline não faz
+  requisição a terceiros).
+
 ## Decisões discutidas e mantidas (não são rejeições)
 
 Registradas para mostrar que houve decisão, não omissão.

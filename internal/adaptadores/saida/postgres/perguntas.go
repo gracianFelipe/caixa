@@ -4,8 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"time"
-
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -83,9 +81,9 @@ func (r *Perguntas) uma(ctx context.Context, sql string, arg any) (pergunta.Perg
 
 func (r *Perguntas) MarcarRespondida(ctx context.Context, lancamentoID identidade.ID) error {
 	if _, err := r.pool.Exec(ctx,
-		`UPDATE perguntas SET estado = 'respondida', respondida_em = $1
-		 WHERE lancamento_id = $2 AND estado = 'aberta'`,
-		time.Now().UTC(), lancamentoID,
+		`UPDATE perguntas SET estado = 'respondida', respondida_em = now()
+		 WHERE lancamento_id = $1 AND estado = 'aberta'`,
+		lancamentoID,
 	); err != nil {
 		return fmt.Errorf("fechando pergunta: %w", err)
 	}

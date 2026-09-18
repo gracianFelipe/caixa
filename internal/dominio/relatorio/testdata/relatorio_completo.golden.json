@@ -77,7 +77,7 @@
       "Categoria": 7,
       "Contraparte": "ELETRO LOJA",
       "Valor": 250000,
-      "Severidade": 5555,
+      "Severidade": 2777,
       "Detalhe": "muito acima do seu padrao dos ultimos meses"
     },
     {
@@ -85,7 +85,7 @@
       "Categoria": 1,
       "Contraparte": "SUPERMERCADO",
       "Valor": 90000,
-      "Severidade": 2000,
+      "Severidade": 1000,
       "Detalhe": "muito acima do seu padrao dos ultimos meses"
     },
     {
@@ -93,7 +93,7 @@
       "Categoria": 3,
       "Contraparte": "POSTO",
       "Valor": 32000,
-      "Severidade": 711,
+      "Severidade": 355,
       "Detalhe": "muito acima do seu padrao dos ultimos meses"
     }
   ]

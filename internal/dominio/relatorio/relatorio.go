@@ -188,7 +188,9 @@ func DetectarAssinatura(j Janela) []Sinal {
 		cadeia := 1
 		for i := len(ls) - 1; i > 0; i-- {
 			atual, anterior := ls[i], ls[i-1]
-			dias := int(atual.OcorridoEm.Sub(anterior.OcorridoEm).Hours() / 24)
+			// Arredonda para o dia mais proximo: 27,9 dias e uma cobranca
+			// mensal (28), nao uma quebra — truncar falharia em fevereiro.
+			dias := int((atual.OcorridoEm.Sub(anterior.OcorridoEm).Hours() + 12) / 24)
 			if dias < assinaturaIntervaloMin || dias > assinaturaIntervaloMax {
 				break
 			}
@@ -328,6 +330,11 @@ func DetectarAtipico(j Janela) []Sinal {
 		}
 	}
 	corte := med + atipicoMultiplicador*mediana(desvios)
+	// MAD zero (historico de valores identicos) faria o corte cair na propria
+	// mediana e qualquer centavo acima viraria "atipico". Piso: o dobro.
+	if corte <= med {
+		corte = 2 * med
+	}
 
 	var sinais []Sinal
 	for _, l := range j.Lancamentos {

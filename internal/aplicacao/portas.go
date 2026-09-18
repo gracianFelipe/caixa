@@ -94,8 +94,12 @@ type RepositorioDeOrcamentos interface {
 
 // RepositorioDeAlertas registra emissoes. RegistrarSeNovo devolve false se o
 // alerta (tipo, chave) ja foi emitido — idempotencia por constraint.
+// Remover e a compensacao: se o ENVIO falhar depois do registro, o registro
+// cai para a proxima rodada tentar de novo — sem ele, o aviso se perderia
+// para sempre por uma falha transitoria do Telegram.
 type RepositorioDeAlertas interface {
 	RegistrarSeNovo(ctx context.Context, tipo, chave string) (bool, error)
+	Remover(ctx context.Context, tipo, chave string) error
 }
 
 // RepositorioDeRegras entrega as regras ativas e registra o aprendizado que

@@ -165,9 +165,16 @@ func (a *agendador) tentar(ctx context.Context) error {
 	}
 	pronto, err := a.relatorios.Gerar(ctx, alvo)
 	if err != nil {
+		// Compensa: sem isto o relatorio do mes se perderia para sempre por
+		// uma falha momentanea de banco ou Telegram.
+		_ = a.alertas.Remover(ctx, "relatorio", alvo.String())
 		return err
 	}
-	return a.cliente.EnviarTexto(ctx, a.chatID, pronto.Texto)
+	if err := a.cliente.EnviarTexto(ctx, a.chatID, pronto.Texto); err != nil {
+		_ = a.alertas.Remover(ctx, "relatorio", alvo.String())
+		return err
+	}
+	return nil
 }
 
 // lacoDoOutbox drena a fila a cada 2s. Erro nao derruba o worker: loga e

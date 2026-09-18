@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -40,10 +41,12 @@ func inserirEvento(ctx context.Context, tx pgx.Tx, e evento.Evento) error {
 	return nil
 }
 
+const maximoDeTentativas = 5
+
 const sqlEventosPendentes = `
 SELECT id, tipo, payload, criado_em
 FROM eventos
-WHERE processado_em IS NULL
+WHERE processado_em IS NULL AND tentativas < $2
 ORDER BY criado_em, id
 FOR UPDATE SKIP LOCKED
 LIMIT $1`
@@ -59,7 +62,7 @@ func (r *Eventos) ConsumirPendentes(ctx context.Context, limite int, processar f
 	}
 	defer tx.Rollback(ctx) //nolint:errcheck
 
-	rows, err := tx.Query(ctx, sqlEventosPendentes, limite)
+	rows, err := tx.Query(ctx, sqlEventosPendentes, limite, maximoDeTentativas)
 	if err != nil {
 		return 0, fmt.Errorf("trancando eventos pendentes: %w", err)
 	}
@@ -70,7 +73,16 @@ func (r *Eventos) ConsumirPendentes(ctx context.Context, limite int, processar f
 
 	for i, e := range eventos {
 		if err := processar(e); err != nil {
-			return i, err // rollback via defer: nada deste lote fica marcado
+			// Rollback via defer devolve o lote; a contagem de tentativas do
+			// evento que falhou sobe FORA da transacao, senao o rollback a
+			// desfaria junto — e o evento envenenado travaria a fila.
+			_ = tx.Rollback(ctx)
+			if _, errUpd := r.pool.Exec(context.WithoutCancel(ctx),
+				"UPDATE eventos SET tentativas = tentativas + 1 WHERE id = $1", e.ID,
+			); errUpd != nil {
+				return i, errors.Join(err, fmt.Errorf("contando tentativa: %w", errUpd))
+			}
+			return i, err
 		}
 	}
 

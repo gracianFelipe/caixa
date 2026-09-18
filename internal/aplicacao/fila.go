@@ -241,6 +241,12 @@ func (f *Fila) ResponderConciliacao(ctx context.Context, perguntaID identidade.I
 		return pergunta.Pergunta{}, ErrPerguntaNaoEncontrada
 	}
 
+	// Callback reentregue (restart do worker, clique duplo) sobre pergunta ja
+	// respondida nao pode agir de novo: o provisorio pode ja estar descartado.
+	if p.Estado != pergunta.Aberta {
+		return pergunta.Pergunta{}, ErrPerguntaNaoEncontrada
+	}
+
 	if mesmoGasto {
 		if err := f.lancamentos.FundirProvisorio(ctx, p.LancamentoID, p.Referencia); err != nil {
 			return pergunta.Pergunta{}, fmt.Errorf("fundindo provisorio: %w", err)
@@ -314,6 +320,9 @@ func (f *Fila) verificarOrcamento(ctx context.Context, l lancamento.Lancamento) 
 		texto := fmt.Sprintf("orcamento de %s em %s: %s de %s (%d%%)",
 			nomeDaCategoria, l.Competencia, gasto, limite, limiar)
 		if err := f.mensageiro.EnviarAviso(ctx, f.chatID, texto); err != nil {
+			// Compensacao: sem isto, uma falha transitoria do Telegram
+			// deixaria o registro e o aviso nunca mais sairia.
+			_ = f.alertas.Remover(ctx, "orcamento", chave)
 			return fmt.Errorf("avisando orcamento: %w", err)
 		}
 	}

@@ -1,0 +1,150 @@
+/* Tela de login: layout centralizado, um unico CTA. Tokens vem de app.css. */
+
+.login {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: var(--espaco-4);
+  padding-bottom: calc(var(--espaco-4) + env(safe-area-inset-bottom));
+}
+
+.login__cartao {
+  width: 100%;
+  max-width: 400px;
+  padding: var(--espaco-5);
+  box-shadow: var(--sombra-1);
+}
+
+.login__marca {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--espaco-2);
+  margin-bottom: var(--espaco-5);
+  text-align: center;
+}
+
+.login__logo {
+  width: 48px;
+  height: 48px;
+  color: var(--cor-primaria);
+}
+
+.login__titulo {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--cor-texto);
+}
+
+.login__sub {
+  margin: 0;
+  font-size: 16px;
+}
+
+.login__form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-4);
+}
+
+/* Erro do formulario: sempre no DOM (regiao viva), some quando vazio.
+   Texto na cor normal e icone + borda em perigo: contraste garantido nos
+   dois modos e o erro nunca depende so da cor. */
+.login__erro {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--espaco-2);
+  padding: var(--espaco-3);
+  border-radius: var(--raio-p);
+  border: 1px solid var(--cor-borda);
+  border-left: 4px solid var(--cor-perigo);
+  background: var(--cor-superficie-2);
+  color: var(--cor-texto);
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.login__erro:empty {
+  display: none;
+}
+
+.login__erro-icone {
+  flex: 0 0 auto;
+  display: inline-flex;
+  color: var(--cor-perigo);
+}
+
+.login__erro-icone svg {
+  width: 20px;
+  height: 20px;
+}
+
+.login__senha {
+  display: flex;
+  align-items: stretch;
+  gap: var(--espaco-2);
+}
+
+.login__senha input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.login__mostrar {
+  flex: 0 0 auto;
+  min-width: 44px;
+  padding-inline: var(--espaco-3);
+}
+
+.login__caps {
+  margin: 0;
+  color: var(--cor-aviso);
+}
+
+.login__caps:empty {
+  display: none;
+}
+
+.login__cta {
+  width: 100%;
+  margin-top: var(--espaco-2);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--espaco-2);
+}
+
+.login__cta-icone {
+  display: inline-flex;
+}
+
+.login__cta-icone:empty {
+  display: none;
+}
+
+.login__cta-icone svg {
+  width: 20px;
+  height: 20px;
+}
+
+.login__girar svg {
+  animation: login-girar 900ms linear infinite;
+}
+
+@keyframes login-girar {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .login__girar svg {
+    animation: none;
+  }
+}
+
+@media (min-width: 768px) {
+  .login__cartao {
+    padding: var(--espaco-6);
+  }
+}
