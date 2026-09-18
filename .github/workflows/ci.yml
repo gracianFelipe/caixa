@@ -84,6 +84,12 @@ jobs:
         # prova que a imagem compila ate o smoke de runtime da Fase 8.
         run: docker build -f deploy/Dockerfile -t caixa:ci .
 
+      - name: docker compose config
+        # Valida sintaxe, anchors e variaveis exigidas do compose de deploy.
+        run: |
+          CAIXA_BD_SENHA=x CAIXA_TELEGRAM_TOKEN=x CAIXA_TELEGRAM_CHAT_ID=1 \
+            docker compose -f deploy/docker-compose.yml config -q
+
       - name: gitleaks
         uses: gitleaks/gitleaks-action@v2
         env:

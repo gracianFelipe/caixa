@@ -185,7 +185,9 @@ mensal), `cmd/caixactl`
 skill ui-ux-pro-max em `web/design-system/caixa/MASTER.md`, overrides no
 topo prevalecem),
 `migracoes/` (SQLs + pacote `migracoes` com `go:embed`; migrador próprio em
-`saida/postgres/migrador.go` — decisão na spec 002, sem goose), `deploy/`,
+`saida/postgres/migrador.go` — decisão na spec 002, sem goose), `deploy/`
+(Dockerfile multiestágio dos 3 binários, compose com worker e restart,
+Caddyfile; runbook em `docs/deploy.md`),
 `.specs/` (specs numeradas; executadas vão para `archive/`),
 `.claude/skills/` (`construtor-de-dominio`, `repositorio-pgx`, `handler-http`
 — destiladas da spec 001), `docs/revisao-ia.md`.

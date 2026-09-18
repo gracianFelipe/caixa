@@ -1,11 +1,27 @@
+# Sobe o sistema inteiro: postgres -> migrar (one-shot) -> api + worker.
+# Producao poe o Caddy (Caddyfile ao lado) na frente da api.
+#
+# Envs obrigatorias (arquivo .env ao lado, gitignored):
+#   CAIXA_BD_SENHA          senha do Postgres (sem espaco nem aspas simples:
+#                           vai crua no DSN keyword)
+#   CAIXA_USUARIO           usuario do login do PWA
+#   CAIXA_SENHA_HASH        hash argon2id gerado por `caixactl senha`
+#   CAIXA_TELEGRAM_TOKEN    token do bot (worker)
+#   CAIXA_TELEGRAM_CHAT_ID  chat do dono (worker)
+#   CAIXA_ATALHO_TOKEN      32+ chars aleatorios (opcional; vazio desliga)
+
+x-bd-url: &bd-url
+  # DSN keyword, nao URL: senha com @ / # % nao precisa de percent-encoding.
+  CAIXA_BD_URL: host=postgres port=5432 user=caixa password=${CAIXA_BD_SENHA:?defina CAIXA_BD_SENHA} dbname=caixa sslmode=disable
+
 services:
   postgres:
     image: postgres:17-alpine
     container_name: caixa-postgres
+    restart: unless-stopped
     environment:
       POSTGRES_DB: caixa
       POSTGRES_USER: caixa
-      # Senha so via ambiente. Em dev, defina em local.ps1 (gitignored).
       POSTGRES_PASSWORD: ${CAIXA_BD_SENHA:?defina CAIXA_BD_SENHA}
     ports:
       - "127.0.0.1:5432:5432"
@@ -25,7 +41,7 @@ services:
       dockerfile: deploy/Dockerfile
     entrypoint: ["/caixactl", "migrar"]
     environment:
-      CAIXA_BD_URL: postgres://caixa:${CAIXA_BD_SENHA:?defina CAIXA_BD_SENHA}@postgres:5432/caixa
+      <<: *bd-url
     depends_on:
       postgres:
         condition: service_healthy
@@ -35,11 +51,32 @@ services:
       context: ..
       dockerfile: deploy/Dockerfile
     container_name: caixa-api
+    restart: unless-stopped
+    stop_grace_period: 15s
     environment:
-      CAIXA_BD_URL: postgres://caixa:${CAIXA_BD_SENHA:?defina CAIXA_BD_SENHA}@postgres:5432/caixa
-      CAIXA_HTTP_ENDERECO: ":8080"
+      <<: *bd-url
+      CAIXA_HTTP_ENDERECO: ":8080" # atras do Caddy; nao publicar direto
+      CAIXA_USUARIO: ${CAIXA_USUARIO:-}
+      CAIXA_SENHA_HASH: ${CAIXA_SENHA_HASH:-}
+      CAIXA_ATALHO_TOKEN: ${CAIXA_ATALHO_TOKEN:-}
     ports:
       - "127.0.0.1:8080:8080"
+    depends_on:
+      migrar:
+        condition: service_completed_successfully
+
+  worker:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    container_name: caixa-worker
+    restart: unless-stopped
+    stop_grace_period: 15s
+    entrypoint: ["/worker"]
+    environment:
+      <<: *bd-url
+      CAIXA_TELEGRAM_TOKEN: ${CAIXA_TELEGRAM_TOKEN:?defina CAIXA_TELEGRAM_TOKEN}
+      CAIXA_TELEGRAM_CHAT_ID: ${CAIXA_TELEGRAM_CHAT_ID:?defina CAIXA_TELEGRAM_CHAT_ID}
     depends_on:
       migrar:
         condition: service_completed_successfully

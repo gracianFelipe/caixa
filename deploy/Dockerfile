@@ -13,6 +13,7 @@ COPY . .
 # caminho da maquina de build dos stacks. tzdata ja vai embutido via import.
 ENV CGO_ENABLED=0
 RUN go build -trimpath -ldflags="-s -w" -o /out/api ./cmd/api \
+ && go build -trimpath -ldflags="-s -w" -o /out/worker ./cmd/worker \
  && go build -trimpath -ldflags="-s -w" -o /out/caixactl ./cmd/caixactl
 
 # Runtime: distroless static — sem shell, sem apt, usuario nao-root, CA certs
@@ -21,6 +22,7 @@ RUN go build -trimpath -ldflags="-s -w" -o /out/api ./cmd/api \
 FROM gcr.io/distroless/static-debian12:nonroot
 
 COPY --from=compilacao /out/api /api
+COPY --from=compilacao /out/worker /worker
 COPY --from=compilacao /out/caixactl /caixactl
 
 EXPOSE 8080
