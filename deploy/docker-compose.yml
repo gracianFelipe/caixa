@@ -11,13 +11,38 @@ services:
       - "127.0.0.1:5432:5432"
     volumes:
       - caixa-dados:/var/lib/postgresql/data
-      # Aplicado apenas na primeira criacao do volume, em ordem alfabetica.
-      - ../migracoes:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U caixa -d caixa"]
       interval: 5s
       timeout: 3s
       retries: 10
+
+  # One-shot: aplica as migracoes embutidas e sai. Idempotente e serializado
+  # por advisory lock, entao rodar em todo `up` e seguro.
+  migrar:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    entrypoint: ["/caixactl", "migrar"]
+    environment:
+      CAIXA_BD_URL: postgres://caixa:${CAIXA_BD_SENHA:?defina CAIXA_BD_SENHA}@postgres:5432/caixa
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    container_name: caixa-api
+    environment:
+      CAIXA_BD_URL: postgres://caixa:${CAIXA_BD_SENHA:?defina CAIXA_BD_SENHA}@postgres:5432/caixa
+      CAIXA_HTTP_ENDERECO: ":8080"
+    ports:
+      - "127.0.0.1:8080:8080"
+    depends_on:
+      migrar:
+        condition: service_completed_successfully
 
 volumes:
   caixa-dados:

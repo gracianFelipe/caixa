@@ -79,6 +79,11 @@ jobs:
       - name: govulncheck
         run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
 
+      - name: docker build
+        # O Docker da maquina de dev esta quebrado (spec 001); a CI e quem
+        # prova que a imagem compila ate o smoke de runtime da Fase 8.
+        run: docker build -f deploy/Dockerfile -t caixa:ci .
+
       - name: gitleaks
         uses: gitleaks/gitleaks-action@v2
         env:

@@ -1,0 +1,15 @@
+# Contexto minimo de build: nada alem do codigo entra na imagem.
+.git
+.github
+.specs
+.claude
+docs
+bin
+extratos
+*.md
+local.ps1
+.env*
+*.ofx
+*.qfx
+*.eml
+deploy/docker-compose.yml

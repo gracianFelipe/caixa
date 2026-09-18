@@ -12,7 +12,7 @@ numa entrevista técnica. Os contratos que o código obedece estão em
 
 ## Estado
 
-**Fase 2 em andamento.** Concluído até aqui (specs em [`.specs/archive/`](.specs/archive/)):
+**Fase 2 concluída.** Concluído até aqui (specs em [`.specs/archive/`](.specs/archive/)):
 
 * **001** — espinha vertical: lançamento entra por HTTP, atravessa domínio e
   aplicação, grava no Postgres, volta por competência.
@@ -28,8 +28,11 @@ numa entrevista técnica. Os contratos que o código obedece estão em
   teste embaralha as regras e prova determinismo). Todo lançamento novo é
   classificado na entrada; sem regra, fica `pendente` para a fila do Telegram.
 
-Próximo: Dockerfile, Telegram, conciliação, relatório com cinco detectores,
-PWA embutido, deploy.
+* **005** — Dockerfile multi-stage (distroless, não-root, binário estático)
+  e compose com migração one-shot antes da API; build provado na CI.
+
+Próximo: Telegram + worker (Fase 3), conciliação e orçamentos (4), relatório
+com cinco detectores (5), PWA embutido (6), IMAP (7), deploy (8).
 
 ## Arquitetura em uma frase
 
