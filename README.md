@@ -12,7 +12,7 @@ numa entrevista técnica. Os contratos que o código obedece estão em
 
 ## Estado
 
-**Fases 1-6 concluídas.** Concluído até aqui (specs em [`.specs/archive/`](.specs/archive/)):
+**Todas as fases do plano concluídas (1-8).** Concluído até aqui (specs em [`.specs/archive/`](.specs/archive/)):
 
 * **001** — espinha vertical: lançamento entra por HTTP, atravessa domínio e
   aplicação, grava no Postgres, volta por competência.
@@ -70,7 +70,23 @@ numa entrevista técnica. Os contratos que o código obedece estão em
   [`docs/deploy.md`](docs/deploy.md). Fase 9 (SQS/S3) descartada de
   propósito: as portas já provaram valor com dois adaptadores + fakes.
 
-Próximo: IMAP do Bradesco (Fase 7) — a última premissa não verificada.
+* **012 (Fase 7)** — e-mail do banco por IMAP: `go-imap/v2` só no
+  transporte, parsing do `.eml` 100% stdlib (multipart, quoted-printable,
+  latin-1), última UID + UIDVALIDITY persistidas (restart não relê nem
+  pula), filtro por remetente, e o alerta entra pela MESMA importação do
+  OFX — quando o extrato chegar dias depois, a conciliação anexa a
+  evidência em vez de duplicar. *Pendente: validar com .eml reais — é o
+  risco nº 1 do plano, e as fixtures são sintéticas por decisão.*
+
+## Pendências que dependem do dono
+
+| O quê | Como |
+|---|---|
+| OFX real do Bradesco | exportar para `extratos/` e rodar `caixactl importar` |
+| Bot do Telegram | criar no @BotFather; `CAIXA_TELEGRAM_TOKEN` e `_CHAT_ID` no `local.ps1` |
+| Alertas por e-mail | senha de app no `local.ps1` (`CAIXA_IMAP_*`); guardar 2-3 `.eml` reais em `extratos/` para calibrar o parser |
+| Login do PWA | `caixactl senha` → `CAIXA_USUARIO`/`CAIXA_SENHA_HASH` |
+| Deploy | seguir [`docs/deploy.md`](docs/deploy.md) |
 
 ## Arquitetura em uma frase
 

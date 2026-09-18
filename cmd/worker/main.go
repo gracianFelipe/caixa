@@ -3,10 +3,12 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/mail"
 	"os"
 	"os/signal"
 	"strconv"
@@ -16,11 +18,14 @@ import (
 	"time"
 	_ "time/tzdata"
 
+	"github.com/gracianFelipe/caixa/internal/adaptadores/entrada/email"
+	"github.com/gracianFelipe/caixa/internal/adaptadores/entrada/email/bradesco"
 	"github.com/gracianFelipe/caixa/internal/adaptadores/saida/postgres"
 	"github.com/gracianFelipe/caixa/internal/adaptadores/saida/relogio"
 	"github.com/gracianFelipe/caixa/internal/adaptadores/saida/telegram"
 	"github.com/gracianFelipe/caixa/internal/aplicacao"
 	"github.com/gracianFelipe/caixa/internal/dominio/competencia"
+	"github.com/gracianFelipe/caixa/internal/dominio/ocorrencia"
 )
 
 func main() {
@@ -36,12 +41,22 @@ type config struct {
 	bdURL  string
 	token  string
 	chatID int64
+
+	// IMAP e opcional: sem as quatro envs o laco de e-mail fica desligado.
+	imapServidor  string
+	imapUsuario   string
+	imapSenha     string
+	imapRemetente string
 }
 
 func lerConfig() (config, error) {
 	c := config{
-		bdURL: os.Getenv("CAIXA_BD_URL"),
-		token: os.Getenv("CAIXA_TELEGRAM_TOKEN"),
+		bdURL:         os.Getenv("CAIXA_BD_URL"),
+		token:         os.Getenv("CAIXA_TELEGRAM_TOKEN"),
+		imapServidor:  os.Getenv("CAIXA_IMAP_SERVIDOR"),
+		imapUsuario:   os.Getenv("CAIXA_IMAP_USUARIO"),
+		imapSenha:     os.Getenv("CAIXA_IMAP_SENHA"),
+		imapRemetente: os.Getenv("CAIXA_IMAP_REMETENTE"),
 	}
 	if c.bdURL == "" {
 		return config{}, errors.New("CAIXA_BD_URL nao definida")
@@ -54,6 +69,12 @@ func lerConfig() (config, error) {
 		return config{}, errors.New("CAIXA_TELEGRAM_CHAT_ID invalida ou ausente")
 	}
 	c.chatID = chat
+
+	imapConfigurado := c.imapServidor != "" || c.imapUsuario != "" || c.imapSenha != "" || c.imapRemetente != ""
+	imapCompleto := c.imapServidor != "" && c.imapUsuario != "" && c.imapSenha != "" && c.imapRemetente != ""
+	if imapConfigurado && !imapCompleto {
+		return config{}, errors.New("CAIXA_IMAP_SERVIDOR, _USUARIO, _SENHA e _REMETENTE andam juntas")
+	}
 	return c, nil
 }
 
@@ -121,6 +142,31 @@ func executar(ctx context.Context, log *slog.Logger) error {
 		defer espera.Done()
 		agendador.laco(ctxSinal, log)
 	}()
+
+	if cfg.imapServidor != "" {
+		importacao := aplicacao.NovoServicoDeImportacao(
+			postgres.NovoRepositorioDeOcorrencias(pool),
+			postgres.NovoRepositorio(pool),
+			postgres.NovoRepositorioDeRegras(pool),
+			relogio.Sistema{},
+			fuso,
+		)
+		leitor := &leitorDeEmail{
+			caixa:      email.Caixa{Servidor: cfg.imapServidor, Usuario: cfg.imapUsuario, Senha: cfg.imapSenha},
+			remetente:  strings.ToLower(cfg.imapRemetente),
+			estado:     postgres.NovoEstadoIMAP(pool),
+			importacao: importacao,
+		}
+		espera.Add(1)
+		go func() {
+			defer espera.Done()
+			leitor.laco(ctxSinal, log)
+		}()
+		log.Info("laco de e-mail ligado", "remetente", cfg.imapRemetente)
+	} else {
+		log.Info("laco de e-mail desligado: CAIXA_IMAP_* ausentes")
+	}
+
 	espera.Wait()
 
 	log.Info("worker encerrado")
@@ -175,6 +221,99 @@ func (a *agendador) tentar(ctx context.Context) error {
 		return err
 	}
 	return nil
+}
+
+// leitorDeEmail transforma alerta do banco em lancamento: a cada 2 minutos
+// busca as UIDs novas, filtra o remetente, parseia e importa pela MESMA
+// Importacao do OFX — idempotencia por Message-Id e conciliacao de graca.
+type leitorDeEmail struct {
+	caixa      email.Caixa
+	remetente  string
+	estado     *postgres.EstadoIMAP
+	importacao *aplicacao.Importacao
+}
+
+func (l *leitorDeEmail) laco(ctx context.Context, log *slog.Logger) {
+	tique := time.NewTicker(2 * time.Minute)
+	defer tique.Stop()
+
+	for {
+		if err := l.rodada(ctx, log); err != nil && !errors.Is(err, context.Canceled) {
+			log.Error("lendo e-mail", "erro", err)
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-tique.C:
+		}
+	}
+}
+
+func (l *leitorDeEmail) rodada(ctx context.Context, log *slog.Logger) error {
+	uidvalidity, ultimaUID, _, err := l.estado.Carregar(ctx)
+	if err != nil {
+		return err
+	}
+
+	mensagens, novaValidity, err := l.caixa.Buscar(ctx, uidvalidity, ultimaUID)
+	if err != nil {
+		return err
+	}
+	if novaValidity != uidvalidity {
+		ultimaUID = 0 // servidor renumerou; Message-Id segura duplicatas
+	}
+
+	maiorUID := ultimaUID
+	var itens []aplicacao.ItemDeExtrato
+	for _, m := range mensagens {
+		if m.UID > maiorUID {
+			maiorUID = m.UID
+		}
+		if !remetenteBate(m.Bruto, l.remetente) {
+			continue
+		}
+		t, err := bradesco.Analisar(m.Bruto)
+		if err != nil {
+			// UID e motivo, nunca conteudo: e-mail e PII.
+			log.Warn("alerta nao parseado", "uid", m.UID, "erro", err)
+			continue
+		}
+		itens = append(itens, aplicacao.ItemDeExtrato{
+			OcorridoEm:  t.OcorridoEm,
+			Valor:       t.Valor,
+			Meio:        t.Meio,
+			Contraparte: t.Contraparte,
+			IDExterno:   t.IDExterno,
+			Payload:     t.Payload,
+		})
+	}
+
+	if len(itens) > 0 {
+		resumo, err := l.importacao.Importar(ctx, ocorrencia.OrigemEmailBanco, itens)
+		if err != nil {
+			return err // UID nao avanca: proxima rodada tenta de novo
+		}
+		log.Info("e-mails importados", "criados", resumo.Criados,
+			"conciliados", resumo.Conciliados, "duplicados", resumo.Duplicados)
+	}
+
+	if maiorUID != ultimaUID || novaValidity != uidvalidity {
+		return l.estado.Salvar(ctx, novaValidity, maiorUID)
+	}
+	return nil
+}
+
+// remetenteBate olha so o cabecalho From, sem parsear o corpo.
+func remetenteBate(bruto []byte, sufixo string) bool {
+	msg, err := mail.ReadMessage(bytes.NewReader(bruto))
+	if err != nil {
+		return false
+	}
+	endereco, err := msg.Header.AddressList("From")
+	if err != nil || len(endereco) == 0 {
+		return false
+	}
+	return strings.HasSuffix(strings.ToLower(endereco[0].Address), sufixo)
 }
 
 // lacoDoOutbox drena a fila a cada 2s. Erro nao derruba o worker: loga e

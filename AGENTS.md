@@ -174,7 +174,9 @@ roda tudo isso com `-race`, um Postgres 17 de serviço, `govulncheck` e Gitleaks
   `lancamento`, `ocorrencia`.
 
 Fica na raiz: `internal/aplicacao` (casos de uso + `portas.go`),
-`internal/adaptadores/{entrada/web, entrada/extrato, saida/postgres, saida/relogio, saida/telegram, saida/senha}`
+`internal/adaptadores/{entrada/web, entrada/extrato, saida/postgres, saida/relogio, saida/telegram, saida/senha}` e `entrada/email{,/bradesco}` (IMAP via
+go-imap/v2 no transporte; parser do .eml em stdlib pura, fixtures
+sintéticas — validação com alertas reais pendente)
 (`extrato` é o tokenizador OFX próprio — SGML, Windows-1252, dinheiro sem
 float; heurística de meio ajustável com dados reais),
 `cmd/api` (serve também o PWA embutido de `web/` e o hub WebSocket),
