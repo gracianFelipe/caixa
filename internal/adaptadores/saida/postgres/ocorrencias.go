@@ -9,6 +9,7 @@ import (
 
 	"github.com/gracianFelipe/caixa/internal/aplicacao"
 	"github.com/gracianFelipe/caixa/internal/dominio/evento"
+	"github.com/gracianFelipe/caixa/internal/dominio/identidade"
 	"github.com/gracianFelipe/caixa/internal/dominio/lancamento"
 	"github.com/gracianFelipe/caixa/internal/dominio/ocorrencia"
 )
@@ -83,4 +84,30 @@ func (r *Ocorrencias) CriarComLancamento(ctx context.Context, o ocorrencia.Ocorr
 		return false, fmt.Errorf("confirmando importacao: %w", err)
 	}
 	return true, nil
+}
+
+// AnexarEvidencia grava a ocorrencia ja apontando para o fato existente,
+// com resultado 'conciliou'. ON CONFLICT DO NOTHING: reimportar o arquivo
+// que conciliou continua idempotente.
+func (r *Ocorrencias) AnexarEvidencia(ctx context.Context, o ocorrencia.Ocorrencia, lancamentoID identidade.ID) (bool, error) {
+	payload, err := json.Marshal(map[string]string{"bruto": o.Payload})
+	if err != nil {
+		return false, fmt.Errorf("serializando payload: %w", err)
+	}
+	var idExterno *string
+	if o.IDExterno != "" {
+		idExterno = &o.IDExterno
+	}
+
+	tag, err := r.pool.Exec(ctx,
+		`INSERT INTO ocorrencias (id, origem_id, id_externo, impressao, payload, lancamento_id, resultado)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7)
+		 ON CONFLICT DO NOTHING`,
+		o.ID, int16(o.Origem), idExterno, o.Impressao, payload, lancamentoID,
+		string(ocorrencia.ResultadoConciliou),
+	)
+	if err != nil {
+		return false, fmt.Errorf("anexando evidencia: %w", err)
+	}
+	return tag.RowsAffected() > 0, nil
 }

@@ -52,6 +52,18 @@ var (
 	ErrOrigemDeCategoria = errors.New("lancamento: origem de categoria invalida")
 )
 
+// Situacao e o ciclo de vida do fato. Provisorio existe para a faixa de
+// conciliacao 60-84: o gasto aparece nas listas (nada some), mas esta
+// marcado ate o dono confirmar se e novo ou o mesmo de outra origem.
+// Descartado e o "apagar sem apagar": a linha fica, fora das somas.
+type Situacao string
+
+const (
+	SituacaoProvisoria Situacao = "provisorio"
+	SituacaoConfirmada Situacao = "confirmado"
+	SituacaoDescartada Situacao = "descartado"
+)
+
 // OrigemDaCategoria registra quem decidiu a categoria. Espelha o CHECK do
 // banco; "pendente" e o estado de quem ainda vai para a fila de pergunta.
 type OrigemDaCategoria string
@@ -75,6 +87,7 @@ type Lancamento struct {
 	ContraparteNorm string            // forma canonica para regras e conciliacao
 	CategoriaID     categoria.ID      // zero = sem categoria
 	CategoriaOrigem OrigemDaCategoria // pendente enquanto CategoriaID for zero
+	Situacao        Situacao
 }
 
 // Dados e o que vem de fora para criar um lancamento. Struct em vez de seis
@@ -120,7 +133,15 @@ func Novo(id identidade.ID, d Dados, fuso *time.Location) (Lancamento, error) {
 		Contraparte:     contraparte,
 		ContraparteNorm: Normalizar(contraparte),
 		CategoriaOrigem: CategoriaPendente,
+		Situacao:        SituacaoConfirmada,
 	}, nil
+}
+
+// Provisorio devolve uma copia marcada para revisao humana (faixa 60-84 da
+// conciliacao). Mesmo padrao de ComCategoria: copia, nunca mutacao.
+func (l Lancamento) Provisorio() Lancamento {
+	l.Situacao = SituacaoProvisoria
+	return l
 }
 
 // ComCategoria devolve uma copia do lancamento com a categoria atribuida.

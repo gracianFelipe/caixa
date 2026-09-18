@@ -44,6 +44,7 @@ func TestNovo(t *testing.T) {
 		Contraparte:     "Supermercado XYZ 0042",
 		ContraparteNorm: "SUPERMERCADO XYZ",
 		CategoriaOrigem: CategoriaPendente,
+		Situacao:        SituacaoConfirmada,
 	}
 
 	// cmp.Diff mostra so o campo que divergiu; com != voce ve dois structs inteiros.
@@ -225,5 +226,16 @@ func TestNormalizar(t *testing.T) {
 				t.Errorf("Normalizar(%q) = %q, queria %q", c.entrada, obtido, c.querido)
 			}
 		})
+	}
+}
+
+func TestProvisorio(t *testing.T) {
+	base, _ := Novo(idFixo, dadosValidos(), saoPaulo)
+	p := base.Provisorio()
+	if p.Situacao != SituacaoProvisoria {
+		t.Errorf("situacao = %s", p.Situacao)
+	}
+	if base.Situacao != SituacaoConfirmada {
+		t.Error("Provisorio mutou o original")
 	}
 }

@@ -110,6 +110,7 @@ func importar(ctx context.Context, caminhos []string, log *slog.Logger) error {
 
 	servico := aplicacao.NovoServicoDeImportacao(
 		postgres.NovoRepositorioDeOcorrencias(pool),
+		postgres.NovoRepositorio(pool),
 		postgres.NovoRepositorioDeRegras(pool),
 		relogio.Sistema{},
 		fuso,
@@ -141,19 +142,21 @@ func importar(ctx context.Context, caminhos []string, log *slog.Logger) error {
 
 		resumo, err := servico.Importar(ctx, ocorrencia.OrigemExtratoOFX, itens)
 		// Contagens em stdout; linha de extrato (valor, contraparte) jamais.
-		fmt.Printf("%s: %d criados, %d duplicados, %d ignorados\n",
-			caminho, resumo.Criados, resumo.Duplicados, resumo.Ignorados)
+		fmt.Printf("%s: %d criados, %d conciliados, %d provisorios, %d duplicados, %d ignorados\n",
+			caminho, resumo.Criados, resumo.Conciliados, resumo.Provisorios, resumo.Duplicados, resumo.Ignorados)
 		if err != nil {
 			return fmt.Errorf("%s: %w", caminho, err)
 		}
 		total.Criados += resumo.Criados
+		total.Conciliados += resumo.Conciliados
+		total.Provisorios += resumo.Provisorios
 		total.Duplicados += resumo.Duplicados
 		total.Ignorados += resumo.Ignorados
 	}
 
 	if len(caminhos) > 1 {
-		fmt.Printf("total: %d criados, %d duplicados, %d ignorados\n",
-			total.Criados, total.Duplicados, total.Ignorados)
+		fmt.Printf("total: %d criados, %d conciliados, %d provisorios, %d duplicados, %d ignorados\n",
+			total.Criados, total.Conciliados, total.Provisorios, total.Duplicados, total.Ignorados)
 	}
 	return nil
 }

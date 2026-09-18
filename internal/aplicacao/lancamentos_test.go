@@ -9,9 +9,12 @@ import (
 	"github.com/gracianFelipe/caixa/internal/dominio/categoria"
 	"github.com/gracianFelipe/caixa/internal/dominio/categorizacao"
 	"github.com/gracianFelipe/caixa/internal/dominio/competencia"
+	"github.com/gracianFelipe/caixa/internal/dominio/conciliacao"
+	"github.com/gracianFelipe/caixa/internal/dominio/dinheiro"
 	"github.com/gracianFelipe/caixa/internal/dominio/evento"
 	"github.com/gracianFelipe/caixa/internal/dominio/identidade"
 	"github.com/gracianFelipe/caixa/internal/dominio/lancamento"
+	"github.com/gracianFelipe/caixa/internal/dominio/ocorrencia"
 )
 
 var saoPaulo = time.FixedZone("America/Sao_Paulo", -3*60*60)
@@ -43,9 +46,10 @@ func regraDeTeste(t *testing.T, id int64, cat categoria.ID, tipo categorizacao.T
 // repoEmMemoria e um fake, nao um mock: implementa a porta de verdade, com
 // comportamento observavel, em vez de gravar uma sequencia esperada de chamadas.
 type repoEmMemoria struct {
-	salvos  []lancamento.Lancamento
-	eventos []evento.Evento
-	falha   error
+	salvos     []lancamento.Lancamento
+	eventos    []evento.Evento
+	candidatos []conciliacao.Candidato
+	falha      error
 }
 
 func (r *repoEmMemoria) Salvar(_ context.Context, l lancamento.Lancamento, e evento.Evento) error {
@@ -68,6 +72,10 @@ func (r *repoEmMemoria) PorID(_ context.Context, id identidade.ID) (lancamento.L
 
 func (r *repoEmMemoria) AtribuirCategoria(context.Context, identidade.ID, categoria.ID, lancamento.OrigemDaCategoria) error {
 	return nil
+}
+
+func (r *repoEmMemoria) CandidatosParaConciliacao(context.Context, dinheiro.Centavos, time.Time, ocorrencia.Origem) ([]conciliacao.Candidato, error) {
+	return r.candidatos, nil
 }
 
 func (r *repoEmMemoria) DaCompetencia(_ context.Context, c competencia.Competencia) ([]lancamento.Lancamento, error) {

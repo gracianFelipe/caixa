@@ -7,6 +7,8 @@ import (
 	"github.com/gracianFelipe/caixa/internal/dominio/categoria"
 	"github.com/gracianFelipe/caixa/internal/dominio/categorizacao"
 	"github.com/gracianFelipe/caixa/internal/dominio/competencia"
+	"github.com/gracianFelipe/caixa/internal/dominio/conciliacao"
+	"github.com/gracianFelipe/caixa/internal/dominio/dinheiro"
 	"github.com/gracianFelipe/caixa/internal/dominio/evento"
 	"github.com/gracianFelipe/caixa/internal/dominio/identidade"
 	"github.com/gracianFelipe/caixa/internal/dominio/lancamento"
@@ -28,6 +30,10 @@ type RepositorioDeLancamentos interface {
 	DaCompetencia(ctx context.Context, c competencia.Competencia) ([]lancamento.Lancamento, error)
 	PorID(ctx context.Context, id identidade.ID) (lancamento.Lancamento, bool, error)
 	AtribuirCategoria(ctx context.Context, id identidade.ID, cat categoria.ID, origem lancamento.OrigemDaCategoria) error
+	// CandidatosParaConciliacao devolve lancamentos de valor identico a ate 3
+	// dias, nao descartados e SEM evidencia da origem informada — o filtro
+	// que impede dois gastos legitimos iguais de virarem um so.
+	CandidatosParaConciliacao(ctx context.Context, valor dinheiro.Centavos, instante time.Time, origem ocorrencia.Origem) ([]conciliacao.Candidato, error)
 }
 
 // RepositorioDeOcorrencias grava evidencia, fato e evento na mesma transacao.
@@ -35,6 +41,9 @@ type RepositorioDeLancamentos interface {
 // repetidos) — a idempotencia mora na constraint, nao em logica de consulta.
 type RepositorioDeOcorrencias interface {
 	CriarComLancamento(ctx context.Context, o ocorrencia.Ocorrencia, l lancamento.Lancamento, e evento.Evento) (criada bool, err error)
+	// AnexarEvidencia grava a ocorrencia apontando para um lancamento que JA
+	// existe (resultado 'conciliou'), sem criar fato novo. false = duplicata.
+	AnexarEvidencia(ctx context.Context, o ocorrencia.Ocorrencia, lancamentoID identidade.ID) (anexada bool, err error)
 }
 
 // RepositorioDeEventos e o lado consumidor do outbox. ConsumirPendentes abre

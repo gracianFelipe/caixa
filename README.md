@@ -37,8 +37,14 @@ numa entrevista técnica. Os contratos que o código obedece estão em
   de categoria com teclado inline que vira regra aprendida, e
   `POST /atalho/lancamentos` com Bearer em comparação constante.
 
-Próximo: conciliação e orçamentos (Fase 4), relatório com cinco detectores
-(5), PWA embutido (6), IMAP (7), deploy (8).
+* **007 (Fase 4a)** — conciliação por pontuação determinística
+  (valor+data+Jaccard de trigramas+meio+origem; ≥85 concilia, 60-84 vira
+  provisório para revisão, <60 cria). O caso clássico — dois gastos legítimos
+  idênticos no mesmo dia — é resolvido por filtro de candidatos (só concorre
+  lançamento SEM evidência da origem que chega), com teste nomeando a cena.
+
+Próximo: orçamentos e alertas (Fase 4b), relatório com cinco detectores (5),
+PWA embutido (6), IMAP (7), deploy (8).
 
 ## Arquitetura em uma frase
 

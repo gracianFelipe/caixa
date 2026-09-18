@@ -14,10 +14,12 @@ import (
 	"github.com/gracianFelipe/caixa/internal/aplicacao"
 	"github.com/gracianFelipe/caixa/internal/dominio/categoria"
 	"github.com/gracianFelipe/caixa/internal/dominio/competencia"
+	"github.com/gracianFelipe/caixa/internal/dominio/conciliacao"
 	"github.com/gracianFelipe/caixa/internal/dominio/dinheiro"
 	"github.com/gracianFelipe/caixa/internal/dominio/evento"
 	"github.com/gracianFelipe/caixa/internal/dominio/identidade"
 	"github.com/gracianFelipe/caixa/internal/dominio/lancamento"
+	"github.com/gracianFelipe/caixa/internal/dominio/ocorrencia"
 )
 
 // Prova em tempo de compilacao que *Repositorio satisfaz a porta declarada
@@ -50,9 +52,9 @@ func NovoRepositorio(pool *pgxpool.Pool) *Repositorio {
 
 const sqlInserir = `
 INSERT INTO lancamentos
-    (id, ocorrido_em, competencia, valor_centavos, meio, contraparte, contraparte_norm, categoria_id, categoria_origem)
+    (id, ocorrido_em, competencia, valor_centavos, meio, contraparte, contraparte_norm, categoria_id, categoria_origem, situacao)
 VALUES
-    ($1, $2, $3, $4, $5, $6, $7, $8, $9)`
+    ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`
 
 // Salvar grava lancamento e evento do outbox na MESMA transacao: um commit,
 // dois fatos. Conversoes explicitas para os tipos base (int64, string): o
@@ -74,7 +76,7 @@ func (r *Repositorio) Salvar(ctx context.Context, l lancamento.Lancamento, e eve
 }
 
 const sqlPorID = `
-SELECT id, ocorrido_em, competencia, valor_centavos, meio, contraparte, contraparte_norm, categoria_id, categoria_origem
+SELECT id, ocorrido_em, competencia, valor_centavos, meio, contraparte, contraparte_norm, categoria_id, categoria_origem, situacao
 FROM lancamentos
 WHERE id = $1`
 
@@ -126,11 +128,12 @@ func argumentosDeInsercao(l lancamento.Lancamento) []any {
 		l.ContraparteNorm,
 		categoriaID,
 		string(l.CategoriaOrigem),
+		string(l.Situacao),
 	}
 }
 
 const sqlDaCompetencia = `
-SELECT id, ocorrido_em, competencia, valor_centavos, meio, contraparte, contraparte_norm, categoria_id, categoria_origem
+SELECT id, ocorrido_em, competencia, valor_centavos, meio, contraparte, contraparte_norm, categoria_id, categoria_origem, situacao
 FROM lancamentos
 WHERE competencia = $1
 ORDER BY ocorrido_em, id`
@@ -161,8 +164,9 @@ func lerLancamento(row pgx.CollectableRow) (lancamento.Lancamento, error) {
 		contraparteNorm string
 		categoriaID     *int16
 		categoriaOrigem string
+		situacao        string
 	)
-	if err := row.Scan(&id, &ocorridoEm, &primeiroDia, &valor, &meio, &contraparte, &contraparteNorm, &categoriaID, &categoriaOrigem); err != nil {
+	if err := row.Scan(&id, &ocorridoEm, &primeiroDia, &valor, &meio, &contraparte, &contraparteNorm, &categoriaID, &categoriaOrigem, &situacao); err != nil {
 		return lancamento.Lancamento{}, fmt.Errorf("lendo lancamento: %w", err)
 	}
 
@@ -181,9 +185,83 @@ func lerLancamento(row pgx.CollectableRow) (lancamento.Lancamento, error) {
 		Contraparte:     contraparte,
 		ContraparteNorm: contraparteNorm,
 		CategoriaOrigem: lancamento.OrigemDaCategoria(categoriaOrigem),
+		Situacao:        lancamento.Situacao(situacao),
 	}
 	if categoriaID != nil {
 		l.CategoriaID = categoria.ID(*categoriaID)
 	}
 	return l, nil
+}
+
+const sqlCandidatos = `
+SELECT l.id, l.ocorrido_em, l.competencia, l.valor_centavos, l.meio, l.contraparte, l.contraparte_norm, l.categoria_id, l.categoria_origem, l.situacao,
+       COALESCE(array_agg(oc.origem_id) FILTER (WHERE oc.origem_id IS NOT NULL), '{}') AS origens
+FROM lancamentos l
+LEFT JOIN ocorrencias oc ON oc.lancamento_id = l.id
+WHERE l.valor_centavos = $1
+  AND l.ocorrido_em BETWEEN $2::timestamptz - interval '3 days' AND $2::timestamptz + interval '3 days'
+  AND l.situacao <> 'descartado'
+  AND NOT EXISTS (
+      SELECT 1 FROM ocorrencias o2
+      WHERE o2.lancamento_id = l.id AND o2.origem_id = $3
+  )
+GROUP BY l.id
+ORDER BY l.ocorrido_em, l.id`
+
+// CandidatosParaConciliacao implementa o filtro do nivel 2: valor identico,
+// ate 3 dias, nao descartado e SEM evidencia da origem que esta chegando.
+// A janela do SQL corta o grosso; a distancia fina em dias de calendario e
+// pontuada no dominio.
+func (r *Repositorio) CandidatosParaConciliacao(ctx context.Context, valor dinheiro.Centavos, instante time.Time, origem ocorrencia.Origem) ([]conciliacao.Candidato, error) {
+	rows, err := r.pool.Query(ctx, sqlCandidatos, int64(valor), instante, int16(origem))
+	if err != nil {
+		return nil, fmt.Errorf("consultando candidatos: %w", err)
+	}
+	defer rows.Close()
+
+	return pgx.CollectRows(rows, lerCandidato)
+}
+
+func lerCandidato(row pgx.CollectableRow) (conciliacao.Candidato, error) {
+	var (
+		id              identidade.ID
+		ocorridoEm      time.Time
+		primeiroDia     time.Time
+		valor           int64
+		meio            string
+		contraparte     string
+		contraparteNorm string
+		categoriaID     *int16
+		categoriaOrigem string
+		situacao        string
+		origens         []int16
+	)
+	if err := row.Scan(&id, &ocorridoEm, &primeiroDia, &valor, &meio, &contraparte, &contraparteNorm, &categoriaID, &categoriaOrigem, &situacao, &origens); err != nil {
+		return conciliacao.Candidato{}, fmt.Errorf("lendo candidato: %w", err)
+	}
+	comp, err := competencia.Nova(primeiroDia.Year(), primeiroDia.Month())
+	if err != nil {
+		return conciliacao.Candidato{}, err
+	}
+
+	c := conciliacao.Candidato{
+		Lancamento: lancamento.Lancamento{
+			ID:              id,
+			OcorridoEm:      ocorridoEm.UTC(),
+			Competencia:     comp,
+			Valor:           dinheiro.Centavos(valor),
+			Meio:            lancamento.Meio(meio),
+			Contraparte:     contraparte,
+			ContraparteNorm: contraparteNorm,
+			CategoriaOrigem: lancamento.OrigemDaCategoria(categoriaOrigem),
+			Situacao:        lancamento.Situacao(situacao),
+		},
+	}
+	if categoriaID != nil {
+		c.Lancamento.CategoriaID = categoria.ID(*categoriaID)
+	}
+	for _, o := range origens {
+		c.Origens = append(c.Origens, ocorrencia.Origem(o))
+	}
+	return c, nil
 }
