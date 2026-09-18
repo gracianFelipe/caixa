@@ -80,7 +80,14 @@ func decodificar(dados []byte) (string, error) {
 	if i := indexByte(dados, '<'); i >= 0 {
 		cabecalho = dados[:i]
 	}
-	declaraUTF8 := strings.Contains(strings.ToUpper(string(cabecalho)), "UTF-8")
+	inicio := strings.ToUpper(string(cabecalho))
+	// OFX 2.x e XML e declara o charset no prologo, que comeca em '<' e por
+	// isso fica FORA do cabecalho OFX 1.x — olha-se tambem o comeco do corpo.
+	if len(inicio) < 8 && len(dados) > 0 {
+		fim := min(200, len(dados))
+		inicio = strings.ToUpper(string(dados[:fim]))
+	}
+	declaraUTF8 := strings.Contains(inicio, "UTF-8") || strings.Contains(inicio, "UNICODE")
 
 	if declaraUTF8 {
 		return string(dados), nil
@@ -350,15 +357,38 @@ func lerData(texto string, fusoPadrao *time.Location) (time.Time, error) {
 // cada acerto/erro vira caso de teste. Na duvida, debito — e o meio mais
 // comum em conta corrente e o menos enganoso quando errado.
 func meioDaTransacao(texto string) lancamento.Meio {
-	t := strings.ToUpper(texto)
+	palavras := strings.FieldsFunc(strings.ToUpper(texto), func(r rune) bool {
+		return r < 'A' || r > 'Z'
+	})
+	tem := func(alvos ...string) bool {
+		for _, p := range palavras {
+			for _, alvo := range alvos {
+				if p == alvo {
+					return true
+				}
+			}
+		}
+		return false
+	}
+	temPrefixo := func(prefixo string) bool {
+		for _, p := range palavras {
+			if strings.HasPrefix(p, prefixo) {
+				return true
+			}
+		}
+		return false
+	}
+
 	switch {
-	case strings.Contains(t, "PIX"):
+	case tem("PIX"):
 		return lancamento.MeioPix
-	case strings.Contains(t, "TED") || strings.Contains(t, "DOC") || strings.Contains(t, "TRANSF"):
+	// Palavra inteira, nunca substring: "TED" mora dentro de LIMITED e
+	// "DOC" dentro de DOCERIA — casar por pedaco rebaixaria a conciliacao.
+	case tem("TED", "DOC") || temPrefixo("TRANSF"):
 		return lancamento.MeioTransferencia
-	case strings.Contains(t, "BOLETO") || strings.Contains(t, "TITULO"):
+	case tem("BOLETO", "TITULO"):
 		return lancamento.MeioBoleto
-	case strings.Contains(t, "SAQUE"):
+	case tem("SAQUE"):
 		return lancamento.MeioDinheiro
 	default:
 		return lancamento.MeioDebito

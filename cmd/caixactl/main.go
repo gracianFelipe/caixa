@@ -12,9 +12,12 @@ import (
 	"time"
 	_ "time/tzdata" // caixactl calcula competencia: precisa do fuso no Windows
 
+	"golang.org/x/term"
+
 	"github.com/gracianFelipe/caixa/internal/adaptadores/entrada/extrato"
 	"github.com/gracianFelipe/caixa/internal/adaptadores/saida/postgres"
 	"github.com/gracianFelipe/caixa/internal/adaptadores/saida/relogio"
+	"github.com/gracianFelipe/caixa/internal/adaptadores/saida/senha"
 	"github.com/gracianFelipe/caixa/internal/aplicacao"
 	"github.com/gracianFelipe/caixa/internal/dominio/categoria"
 	"github.com/gracianFelipe/caixa/internal/dominio/competencia"
@@ -24,7 +27,7 @@ import (
 	"github.com/gracianFelipe/caixa/migracoes"
 )
 
-const uso = "uso: caixactl <migrar | importar arquivo.ofx [...] | orcamento -categoria N -limite \"R$ X\" [-competencia AAAA-MM]>"
+const uso = "uso: caixactl <migrar | importar arquivo.ofx [...] | orcamento -categoria N -limite \"R$ X\" [-competencia AAAA-MM] | senha>"
 
 func main() {
 	// CLI: texto legivel em stderr; stdout fica livre para dados.
@@ -68,6 +71,8 @@ func executar(ctx context.Context, args []string, log *slog.Logger) error {
 			return err
 		}
 		return definirOrcamento(ctx, *categoriaID, *limite, *comp, log)
+	case "senha":
+		return gerarHashDeSenha()
 	default:
 		return fmt.Errorf("subcomando desconhecido: %q (%s)", args[0], uso)
 	}
@@ -99,6 +104,38 @@ func migrar(ctx context.Context, log *slog.Logger) error {
 	if len(aplicadas) == 0 {
 		log.Info("nada a aplicar: banco ja esta na ultima versao")
 	}
+	return nil
+}
+
+// gerarHashDeSenha le a senha SEM eco no terminal (nunca por argumento: linha
+// de comando fica no historico do shell) e imprime o PHC para o local.ps1.
+func gerarHashDeSenha() error {
+	fmt.Fprint(os.Stderr, "senha: ")
+	primeira, err := term.ReadPassword(int(os.Stdin.Fd()))
+	fmt.Fprintln(os.Stderr)
+	if err != nil {
+		return fmt.Errorf("lendo senha: %w", err)
+	}
+	fmt.Fprint(os.Stderr, "repita: ")
+	segunda, err := term.ReadPassword(int(os.Stdin.Fd()))
+	fmt.Fprintln(os.Stderr)
+	if err != nil {
+		return fmt.Errorf("lendo confirmacao: %w", err)
+	}
+	if string(primeira) != string(segunda) {
+		return errors.New("as senhas nao conferem")
+	}
+	if len(primeira) < 12 {
+		return errors.New("senha muito curta: use pelo menos 12 caracteres")
+	}
+
+	phc, err := senha.Argon2id{}.Gerar(string(primeira))
+	if err != nil {
+		return err
+	}
+	// So o hash em stdout: da para redirecionar sem o rotulo junto.
+	fmt.Println(phc)
+	fmt.Fprintln(os.Stderr, `coloque no local.ps1:  $env:CAIXA_SENHA_HASH = '<o hash acima>'  (aspas SIMPLES: o hash tem $)`)
 	return nil
 }
 
@@ -171,6 +208,11 @@ func importar(ctx context.Context, caminhos []string, log *slog.Logger) error {
 
 	var total aplicacao.ResumoDaImportacao
 	for _, caminho := range caminhos {
+		if info, err := os.Stat(caminho); err != nil {
+			return fmt.Errorf("lendo %s: %w", caminho, err)
+		} else if info.Size() > extrato.TamanhoMaximo {
+			return fmt.Errorf("%s: arquivo acima de %d MiB", caminho, extrato.TamanhoMaximo>>20)
+		}
 		dados, err := os.ReadFile(caminho)
 		if err != nil {
 			return fmt.Errorf("lendo %s: %w", caminho, err)

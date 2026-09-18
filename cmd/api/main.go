@@ -17,7 +17,9 @@ import (
 	"github.com/gracianFelipe/caixa/internal/adaptadores/entrada/web"
 	"github.com/gracianFelipe/caixa/internal/adaptadores/saida/postgres"
 	"github.com/gracianFelipe/caixa/internal/adaptadores/saida/relogio"
+	"github.com/gracianFelipe/caixa/internal/adaptadores/saida/senha"
 	"github.com/gracianFelipe/caixa/internal/aplicacao"
+	webapp "github.com/gracianFelipe/caixa/web"
 )
 
 func main() {
@@ -32,24 +34,38 @@ func main() {
 }
 
 type config struct {
-	bdURL        string
-	httpEndereco string
-	atalhoToken  string
+	bdURL          string
+	httpEndereco   string
+	atalhoToken    string
+	usuario        string
+	senhaHash      string
+	cookieInseguro bool
 }
 
-// lerConfig le tudo do ambiente. A URL do banco e o token carregam segredo e
-// nunca sao logados.
+// lerConfig le tudo do ambiente. URL do banco, token e hash carregam segredo
+// e nunca sao logados.
 func lerConfig() (config, error) {
 	c := config{
-		bdURL:        os.Getenv("CAIXA_BD_URL"),
-		httpEndereco: os.Getenv("CAIXA_HTTP_ENDERECO"),
-		atalhoToken:  os.Getenv("CAIXA_ATALHO_TOKEN"),
+		bdURL:          os.Getenv("CAIXA_BD_URL"),
+		httpEndereco:   os.Getenv("CAIXA_HTTP_ENDERECO"),
+		atalhoToken:    os.Getenv("CAIXA_ATALHO_TOKEN"),
+		usuario:        os.Getenv("CAIXA_USUARIO"),
+		senhaHash:      os.Getenv("CAIXA_SENHA_HASH"),
+		cookieInseguro: os.Getenv("CAIXA_HTTP_INSEGURO") == "1",
 	}
 	if c.bdURL == "" {
 		return config{}, errors.New("CAIXA_BD_URL nao definida")
 	}
 	if c.httpEndereco == "" {
-		c.httpEndereco = ":8080"
+		// Loopback por padrao: expor em todas as interfaces e decisao
+		// explicita de deploy (CAIXA_HTTP_ENDERECO=:8080 atras do Caddy).
+		c.httpEndereco = "127.0.0.1:8080"
+	}
+	if c.atalhoToken != "" && len(c.atalhoToken) < 32 {
+		return config{}, errors.New("CAIXA_ATALHO_TOKEN muito curto: use 32+ caracteres aleatorios")
+	}
+	if (c.usuario == "") != (c.senhaHash == "") {
+		return config{}, errors.New("CAIXA_USUARIO e CAIXA_SENHA_HASH andam juntos")
 	}
 	return c, nil
 }
@@ -85,14 +101,44 @@ func executar(ctx context.Context, log *slog.Logger) error {
 		postgres.NovoRepositorioDeOrcamentos(pool),
 		postgres.NovoRepositorioDeCategorias(pool),
 	)
+	orcamentos := aplicacao.NovoServicoDeOrcamentos(
+		postgres.NovoRepositorioDeOrcamentos(pool),
+		postgres.NovoRepositorio(pool),
+		postgres.NovoRepositorioDeCategorias(pool),
+	)
+	acesso := aplicacao.NovoAcesso(
+		postgres.NovoRepositorioDeSessoes(pool),
+		senha.Argon2id{},
+		relogio.Sistema{},
+		cfg.usuario, cfg.senhaHash,
+	)
+
+	// Hub + LISTEN: o gatilho da migracao 006 avisa a cada evento novo; o hub
+	// repassa aos WebSockets. A escuta morre com o contexto do servidor.
+	hub := web.NovoHub(log)
+	ctxEscuta, pararEscuta := context.WithCancel(ctx)
+	defer pararEscuta()
+	go func() {
+		err := postgres.NovoOuvinteDeNotificacoes(pool).Escutar(ctxEscuta, "caixa_eventos", func(tipo string) {
+			hub.Transmitir([]byte(`{"tipo":"` + tipo + `"}`))
+		})
+		if err != nil && !errors.Is(err, context.Canceled) {
+			log.Error("escuta de notificacoes encerrada", "erro", err)
+		}
+	}()
 
 	servidor := &http.Server{
 		Addr: cfg.httpEndereco,
 		Handler: web.NovoHandler(web.Servicos{
-			Lancamentos: lancamentos,
-			Catalogo:    catalogo,
-			Relatorios:  relatorios,
-			AtalhoToken: cfg.atalhoToken,
+			Lancamentos:    lancamentos,
+			Catalogo:       catalogo,
+			Relatorios:     relatorios,
+			Orcamentos:     orcamentos,
+			Acesso:         acesso,
+			Hub:            hub,
+			App:            webapp.App(),
+			AtalhoToken:    cfg.atalhoToken,
+			CookieInseguro: cfg.cookieInseguro,
 		}, log),
 		ReadHeaderTimeout: 5 * time.Second, // fecha conexao que abre e nao manda cabecalho (slowloris)
 		ReadTimeout:       10 * time.Second,

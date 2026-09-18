@@ -2,7 +2,13 @@
 // lugar fora de cmd e testes onde time.Now aparece.
 package relogio
 
-import "time"
+import (
+	"time"
+
+	"github.com/gracianFelipe/caixa/internal/aplicacao"
+)
+
+var _ aplicacao.Relogio = Sistema{}
 
 // Sistema le o relogio da maquina. Struct vazia: nao tem estado, e o tipo
 // existe so para satisfazer a interface.

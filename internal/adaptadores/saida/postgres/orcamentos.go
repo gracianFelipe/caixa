@@ -100,6 +100,44 @@ func (r *Orcamentos) Vigentes(ctx context.Context, comp competencia.Competencia)
 	return limites, nil
 }
 
+// VigentesDetalhados e Vigentes com a informacao "e do mes ou e o padrao":
+// a tela de orcamentos mostra a diferenca. competencia IS NOT NULL na linha
+// vencedora do DISTINCT ON = limite especifico.
+func (r *Orcamentos) VigentesDetalhados(ctx context.Context, comp competencia.Competencia) ([]aplicacao.LimiteVigenteDetalhado, error) {
+	rows, err := r.pool.Query(ctx,
+		`SELECT DISTINCT ON (categoria_id) categoria_id, limite_centavos, competencia IS NOT NULL
+		 FROM orcamentos
+		 WHERE competencia = $1 OR competencia IS NULL
+		 ORDER BY categoria_id, competencia NULLS LAST`,
+		comp.PrimeiroDia(),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("consultando orcamentos vigentes: %w", err)
+	}
+	defer rows.Close()
+
+	var detalhados []aplicacao.LimiteVigenteDetalhado
+	for rows.Next() {
+		var (
+			cat        int16
+			limite     int64
+			especifico bool
+		)
+		if err := rows.Scan(&cat, &limite, &especifico); err != nil {
+			return nil, fmt.Errorf("lendo orcamento vigente: %w", err)
+		}
+		detalhados = append(detalhados, aplicacao.LimiteVigenteDetalhado{
+			Categoria: categoria.ID(cat), Limite: dinheiro.Centavos(limite), Especifico: especifico,
+		})
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("lendo orcamentos vigentes: %w", err)
+	}
+	return detalhados, nil
+}
+
+var _ aplicacao.ConsultaDeOrcamentos = (*Orcamentos)(nil)
+
 type Alertas struct {
 	pool *pgxpool.Pool
 }
@@ -119,4 +157,14 @@ func (r *Alertas) RegistrarSeNovo(ctx context.Context, tipo, chave string) (bool
 		return false, fmt.Errorf("registrando alerta: %w", err)
 	}
 	return tag.RowsAffected() > 0, nil
+}
+
+// Remover desfaz um registro cujo envio falhou (compensacao).
+func (r *Alertas) Remover(ctx context.Context, tipo, chave string) error {
+	if _, err := r.pool.Exec(ctx,
+		"DELETE FROM alertas WHERE tipo = $1 AND chave = $2", tipo, chave,
+	); err != nil {
+		return fmt.Errorf("removendo alerta: %w", err)
+	}
+	return nil
 }

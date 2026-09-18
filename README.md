@@ -12,7 +12,7 @@ numa entrevista técnica. Os contratos que o código obedece estão em
 
 ## Estado
 
-**Fases 1-5 concluídas — marco "pronto para entrevista".** Concluído até aqui (specs em [`.specs/archive/`](.specs/archive/)):
+**Fases 1-6 concluídas.** Concluído até aqui (specs em [`.specs/archive/`](.specs/archive/)):
 
 * **001** — espinha vertical: lançamento entra por HTTP, atravessa domínio e
   aplicação, grava no Postgres, volta por competência.
@@ -56,7 +56,15 @@ numa entrevista técnica. Os contratos que o código obedece estão em
   Telegram e agendador do dia 1 às 08:00 com idempotência pela tabela de
   alertas (restart não duplica nem pula).
 
-Próximo: PWA embutido (Fase 6), IMAP (7), deploy (8).
+* **010 (Fase 6)** — PWA embutido no binário (`go:embed`, HTML/CSS/JS puros
+  — decisão de trocar o Next.js do plano registrada em `docs/revisao-ia.md`):
+  login argon2id + sessão deslizante em cookie HttpOnly/Strict (hash do token
+  no banco), rate limit no login, CSP estrita sem inline, WebSocket
+  `/api/ao-vivo` alimentado por `LISTEN/NOTIFY` (importar pelo terminal
+  atualiza a tela aberta), telas Mês/Lançamentos/Relatório/Orçamentos com
+  categoria em um toque. Rotas ganharam prefixo `/api`.
+
+Próximo: IMAP (Fase 7), deploy (8).
 
 ## Arquitetura em uma frase
 
@@ -109,6 +117,12 @@ Endpoints:
 | `GET` | `/categorias` | vocabulário fixo de categorias |
 | `POST` | `/atalho/lancamentos` | captura rápida (Atalho do iOS); exige `Authorization: Bearer` de `CAIXA_ATALHO_TOKEN` |
 | `GET` | `/relatorio/AAAA-MM` | relatório do mês: totais, por categoria, cinco detectores, texto pronto |
+
+Rotas de dados vivem sob `/api` e exigem sessão (login do PWA). Para o
+login: `go run ./cmd/caixactl senha` gera o hash argon2id; defina
+`CAIXA_USUARIO` e `CAIXA_SENHA_HASH` no `local.ps1` (aspas simples: o hash
+tem `$`) e, em dev sem TLS, `CAIXA_HTTP_INSEGURO=1`. Abra
+`http://127.0.0.1:8080/`.
 
 ```powershell
 # no PowerShell, mande JSON por arquivo: aspas escapadas na linha de comando quebram

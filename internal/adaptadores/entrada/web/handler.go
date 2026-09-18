@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"io/fs"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -18,6 +19,7 @@ import (
 	"github.com/gracianFelipe/caixa/internal/dominio/categoria"
 	"github.com/gracianFelipe/caixa/internal/dominio/competencia"
 	"github.com/gracianFelipe/caixa/internal/dominio/dinheiro"
+	"github.com/gracianFelipe/caixa/internal/dominio/identidade"
 	"github.com/gracianFelipe/caixa/internal/dominio/lancamento"
 )
 
@@ -28,6 +30,13 @@ type Lancamentos interface {
 	Registrar(ctx context.Context, d lancamento.Dados) (lancamento.Lancamento, error)
 	Listar(ctx context.Context, c competencia.Competencia) ([]lancamento.Lancamento, error)
 	Capturar(ctx context.Context, valorTexto, contraparte, meioTexto string) (lancamento.Lancamento, error)
+	Categorizar(ctx context.Context, id identidade.ID, cat categoria.ID) (lancamento.Lancamento, error)
+}
+
+// OrcamentosServico e a visao e a escrita de limites que a tela consome.
+type OrcamentosServico interface {
+	Visao(ctx context.Context, comp competencia.Competencia) ([]aplicacao.VisaoDeOrcamento, error)
+	Definir(ctx context.Context, cat categoria.ID, comp competencia.Competencia, limite dinheiro.Centavos) error
 }
 
 // Catalogo e a segunda interface deste consumidor: separada de Lancamentos
@@ -41,13 +50,19 @@ type Relatorios interface {
 	Gerar(ctx context.Context, alvo competencia.Competencia) (aplicacao.RelatorioPronto, error)
 }
 
-// Servicos agrupa o que o handler consome; struct nomeada em vez de quatro
-// parametros posicionais.
+// Servicos agrupa o que o handler consome; struct nomeada em vez de uma
+// fileira de parametros posicionais.
 type Servicos struct {
 	Lancamentos Lancamentos
 	Catalogo    Catalogo
 	Relatorios  Relatorios
+	Orcamentos  OrcamentosServico
+	Acesso      Acesso
+	Hub         *Hub  // nil desliga o /api/ao-vivo
+	App         fs.FS // nil desliga o PWA (so API)
 	AtalhoToken string
+	// CookieInseguro derruba o Secure do cookie para dev em http://localhost.
+	CookieInseguro bool
 }
 
 // Um lancamento em JSON tem ~200 bytes; 64 KiB e folga, nao permissao.
@@ -59,29 +74,156 @@ var (
 )
 
 type servidor struct {
-	lancamentos Lancamentos
-	catalogo    Catalogo
-	relatorios  Relatorios
-	log         *slog.Logger
+	lancamentos  Lancamentos
+	catalogo     Catalogo
+	relatorios   Relatorios
+	orcamentos   OrcamentosServico
+	acesso       Acesso
+	limitador    *limitadorPorIP
+	cookieSeguro bool
+	log          *slog.Logger
 }
 
-// NovoHandler monta as rotas e devolve http.Handler, nao *ServeMux: quem
-// chama nao precisa saber como as rotas sao montadas. AtalhoToken vazio
-// desliga a rota do atalho — sem token nao existe endpoint para proteger.
+// NovoHandler monta as rotas e devolve http.Handler. Tudo em /api exige
+// sessao, exceto: POST /api/sessao (e o login), /saude (liveness) e o
+// atalho, que autentica por Bearer proprio. AtalhoToken vazio desliga a
+// rota do atalho — sem token nao existe endpoint para proteger.
 func NovoHandler(sv Servicos, log *slog.Logger) http.Handler {
-	s := &servidor{lancamentos: sv.Lancamentos, catalogo: sv.Catalogo, relatorios: sv.Relatorios, log: log}
+	s := &servidor{
+		lancamentos: sv.Lancamentos, catalogo: sv.Catalogo, relatorios: sv.Relatorios,
+		orcamentos: sv.Orcamentos, acesso: sv.Acesso,
+		limitador:    novoLimitadorPorIP(5, time.Minute, time.Now),
+		cookieSeguro: !sv.CookieInseguro,
+		log:          log,
+	}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /saude", s.saude)
-	mux.HandleFunc("POST /lancamentos", s.registrar)
-	mux.HandleFunc("GET /lancamentos", s.listar)
-	mux.HandleFunc("GET /categorias", s.categorias)
-	mux.HandleFunc("GET /relatorio/{competencia}", s.relatorio)
-	if sv.AtalhoToken != "" {
-		mux.Handle("POST /atalho/lancamentos", exigirBearer(sv.AtalhoToken, http.HandlerFunc(s.capturar)))
+
+	if sv.Acesso != nil {
+		mux.HandleFunc("POST /api/sessao", s.entrar)
+		mux.HandleFunc("GET /api/sessao", s.sessao)
+		mux.HandleFunc("DELETE /api/sessao", s.sair)
 	}
 
-	return registrarAcesso(log, mux)
+	protegido := func(h http.HandlerFunc) http.Handler {
+		if sv.Acesso == nil {
+			return h // API sem login configurado (testes antigos): aberta
+		}
+		return s.exigirSessao(h)
+	}
+	mux.Handle("POST /api/lancamentos", protegido(s.registrar))
+	mux.Handle("GET /api/lancamentos", protegido(s.listar))
+	mux.Handle("PUT /api/lancamentos/{id}/categoria", protegido(s.categorizar))
+	mux.Handle("GET /api/categorias", protegido(s.categorias))
+	mux.Handle("GET /api/relatorio/{competencia}", protegido(s.relatorio))
+	if sv.Orcamentos != nil {
+		mux.Handle("GET /api/orcamentos", protegido(s.listarOrcamentos))
+		mux.Handle("PUT /api/orcamentos", protegido(s.definirOrcamento))
+	}
+	if sv.Hub != nil {
+		mux.Handle("GET /api/ao-vivo", protegido(sv.Hub.ServeHTTP))
+	}
+
+	if sv.AtalhoToken != "" {
+		atalho := exigirBearer(sv.AtalhoToken, http.HandlerFunc(s.capturar))
+		mux.Handle("POST /api/atalho/lancamentos", atalho)
+		mux.Handle("POST /atalho/lancamentos", atalho) // alias da fase 3; some na proxima versao
+	}
+
+	if sv.App != nil {
+		mux.Handle("/", servirApp(sv.App))
+	}
+
+	return registrarAcesso(log, cabecalhosDeSeguranca(conferirOrigem(mux)))
+}
+
+// categorizar aplica categoria manual a um lancamento existente.
+func (s *servidor) categorizar(w http.ResponseWriter, r *http.Request) {
+	id, err := identidade.Analisar(r.PathValue("id"))
+	if err != nil {
+		s.responderErro(w, r, err)
+		return
+	}
+
+	var pedido struct {
+		CategoriaID int16 `json:"categoria_id"`
+	}
+	if err := lerJSON(w, r, &pedido); err != nil {
+		s.responderErro(w, r, err)
+		return
+	}
+
+	l, err := s.lancamentos.Categorizar(r.Context(), id, categoria.ID(pedido.CategoriaID))
+	if err != nil {
+		s.responderErro(w, r, err)
+		return
+	}
+	responderJSON(w, http.StatusOK, paraResposta(l))
+}
+
+type respostaDeOrcamento struct {
+	CategoriaID int16  `json:"categoria_id"`
+	Nome        string `json:"nome"`
+	// Ponteiro: null quando a categoria nao tem limite — zero seria mentira.
+	LimiteCentavos *int64 `json:"limite_centavos"`
+	GastoCentavos  int64  `json:"gasto_centavos"`
+	Especifico     bool   `json:"especifico"`
+}
+
+func (s *servidor) listarOrcamentos(w http.ResponseWriter, r *http.Request) {
+	comp, err := competencia.Analisar(r.URL.Query().Get("competencia"))
+	if err != nil {
+		s.responderErro(w, r, err)
+		return
+	}
+
+	visao, err := s.orcamentos.Visao(r.Context(), comp)
+	if err != nil {
+		s.responderErro(w, r, err)
+		return
+	}
+
+	resposta := make([]respostaDeOrcamento, 0, len(visao))
+	for _, v := range visao {
+		item := respostaDeOrcamento{
+			CategoriaID: int16(v.Categoria.ID), Nome: v.Categoria.Nome,
+			GastoCentavos: int64(v.Gasto), Especifico: v.Especifico,
+		}
+		if v.Limite > 0 {
+			limite := int64(v.Limite)
+			item.LimiteCentavos = &limite
+		}
+		resposta = append(resposta, item)
+	}
+	responderJSON(w, http.StatusOK, resposta)
+}
+
+func (s *servidor) definirOrcamento(w http.ResponseWriter, r *http.Request) {
+	var pedido struct {
+		CategoriaID    int16   `json:"categoria_id"`
+		LimiteCentavos int64   `json:"limite_centavos"`
+		Competencia    *string `json:"competencia"` // null = limite padrao
+	}
+	if err := lerJSON(w, r, &pedido); err != nil {
+		s.responderErro(w, r, err)
+		return
+	}
+
+	var comp competencia.Competencia
+	if pedido.Competencia != nil && *pedido.Competencia != "" {
+		var err error
+		if comp, err = competencia.Analisar(*pedido.Competencia); err != nil {
+			s.responderErro(w, r, err)
+			return
+		}
+	}
+
+	if err := s.orcamentos.Definir(r.Context(), categoria.ID(pedido.CategoriaID), comp, dinheiro.Centavos(pedido.LimiteCentavos)); err != nil {
+		s.responderErro(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // respostaDeRelatorio e o contrato JSON do relatorio: centavos inteiros e o
@@ -335,6 +477,9 @@ func lerJSON(w http.ResponseWriter, r *http.Request, destino any) error {
 var errosDoCliente = []error{
 	errJSON,
 	competencia.ErrFormato,
+	identidade.ErrFormato,
+	identidade.ErrVazio,
+	lancamento.ErrCategoriaInvalida,
 	lancamento.ErrInstanteZero,
 	lancamento.ErrValorZero,
 	lancamento.ErrMeioInvalido,
@@ -348,6 +493,10 @@ var errosDoCliente = []error{
 func (s *servidor) responderErro(w http.ResponseWriter, r *http.Request, err error) {
 	if errors.Is(err, errCorpoGrande) {
 		responderJSON(w, http.StatusRequestEntityTooLarge, respostaDeErro{Erro: err.Error()})
+		return
+	}
+	if errors.Is(err, aplicacao.ErrNaoEncontrado) {
+		responderJSON(w, http.StatusNotFound, respostaDeErro{Erro: err.Error()})
 		return
 	}
 	for _, conhecido := range errosDoCliente {
@@ -366,6 +515,8 @@ func (s *servidor) responderErro(w http.ResponseWriter, r *http.Request, err err
 func responderJSON(w http.ResponseWriter, status int, corpo any) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
+	// Dado financeiro nao fica em cache de navegador nem de proxy.
+	w.Header().Set("Cache-Control", "no-store")
 	w.WriteHeader(status)
 	// Falha aqui significa cliente que fechou a conexao; nao ha resposta alternativa.
 	_ = json.NewEncoder(w).Encode(corpo)

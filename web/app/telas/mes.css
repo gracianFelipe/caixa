@@ -1,0 +1,302 @@
+/* Tela Mês — usa só os tokens e utilitários de app.css. */
+
+.mes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-4);
+}
+
+/* Ações e captura rápida */
+
+.mes-acoes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-3);
+}
+
+.mes-alternar {
+  align-self: flex-end;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--espaco-2);
+  cursor: pointer;
+}
+
+.mes-alternar__icone {
+  display: inline-flex;
+  width: 20px;
+  height: 20px;
+  transition: transform var(--duracao) ease;
+}
+
+.mes-alternar__icone svg {
+  width: 100%;
+  height: 100%;
+}
+
+/* O "+" vira "x" quando o painel está aberto: mesmo botão fecha. */
+.mes-alternar[aria-expanded="true"] .mes-alternar__icone {
+  transform: rotate(45deg);
+}
+
+.mes-captura {
+  display: grid;
+  gap: var(--espaco-3);
+}
+
+.mes-captura .titulo-secao {
+  margin: 0;
+}
+
+.mes-captura .campo__ajuda {
+  margin: 0;
+  color: var(--cor-texto-fraco);
+  font-size: 14px;
+}
+
+.mes-captura__erro {
+  margin: 0;
+  min-height: 1.25em;
+  color: var(--cor-perigo);
+  font-size: 14px;
+}
+
+.mes-captura__acoes {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--espaco-2);
+}
+
+.mes-captura__acoes .botao {
+  flex: 1 1 140px;
+}
+
+@media (min-width: 768px) {
+  .mes-captura__acoes .botao {
+    flex: 0 0 auto;
+    min-width: 140px;
+  }
+}
+
+/* Painel de dados */
+
+.mes-painel {
+  display: grid;
+  gap: var(--espaco-4);
+  align-items: start;
+}
+
+.mes-painel .titulo-secao {
+  margin: 0 0 var(--espaco-3);
+}
+
+/* Cartão de destaque */
+
+.mes-destaque {
+  display: grid;
+  gap: var(--espaco-2);
+}
+
+.mes-destaque .rotulo,
+.mes-destaque .valor {
+  margin: 0;
+}
+
+.mes-destaque .valor--destaque {
+  line-height: 1.1;
+  overflow-wrap: anywhere;
+}
+
+.mes-comparacao {
+  display: flex;
+  align-items: center;
+  gap: var(--espaco-1);
+  margin: 0;
+  color: var(--cor-texto-fraco);
+  font-size: 14px;
+}
+
+.mes-comparacao__icone {
+  display: inline-flex;
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  transition: transform var(--duracao) ease;
+}
+
+.mes-comparacao__icone svg {
+  width: 100%;
+  height: 100%;
+}
+
+/* Seta "direita" girada: gasto subiu (âmbar) ou caiu (verde). O texto
+   sempre diz a direção; a cor é reforço, nunca a única pista. */
+.mes-comparacao--sobe .mes-comparacao__icone {
+  transform: rotate(-90deg);
+  color: var(--cor-aviso);
+}
+
+.mes-comparacao--desce .mes-comparacao__icone {
+  transform: rotate(90deg);
+  color: var(--cor-acento);
+}
+
+.mes-totais {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--espaco-3);
+  margin-top: var(--espaco-2);
+  padding-top: var(--espaco-3);
+  border-top: 1px solid var(--cor-borda);
+}
+
+.mes-totais .rotulo,
+.mes-totais .valor {
+  display: block;
+  margin: 0;
+}
+
+.mes-totais .valor {
+  font-size: 18px;
+  overflow-wrap: anywhere;
+}
+
+/* Sinais */
+
+.mes-sinais {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--espaco-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mes-sinais .sinal svg {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+}
+
+/* Por categoria */
+
+.mes-categorias {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mes-categoria {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--espaco-1) var(--espaco-3);
+  align-items: center;
+}
+
+.mes-categoria__nome {
+  margin: 0;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.mes-categoria__qtd {
+  margin: 0;
+  color: var(--cor-texto-fraco);
+  font-size: 14px;
+}
+
+.mes-categoria .valor {
+  grid-row: 1 / span 2;
+  grid-column: 2;
+  align-self: center;
+  white-space: nowrap;
+}
+
+.mes-categoria .barra {
+  grid-column: 1 / -1;
+  margin-top: var(--espaco-1);
+}
+
+/* Esqueleto */
+
+.mes-esqueleto {
+  display: grid;
+  gap: var(--espaco-3);
+}
+
+.mes-esqueleto .esqueleto {
+  display: block;
+  height: 1em;
+  border-radius: var(--raio-p);
+}
+
+.mes-esqueleto--rotulo {
+  width: 40%;
+}
+
+.mes-esqueleto--destaque {
+  width: 65%;
+  height: 2.5rem !important;
+}
+
+.mes-esqueleto--linha {
+  width: 85%;
+}
+
+.mes-esqueleto--linha-curta {
+  width: 55%;
+}
+
+.mes-esqueleto--barra {
+  width: 100%;
+  height: 8px !important;
+}
+
+/* Estado vazio e erro: reforço caso .vazio não estilize filhos */
+
+.mes-vazio h2 {
+  margin: 0 0 var(--espaco-2);
+  font-size: 18px;
+}
+
+.mes-vazio p {
+  margin: 0 0 var(--espaco-4);
+  color: var(--cor-texto-fraco);
+}
+
+/* Desktop: resumo e sinais à esquerda, categorias à direita */
+
+@media (min-width: 1024px) {
+  .mes-painel {
+    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+    grid-template-areas:
+      "destaque categorias"
+      "sinais categorias"
+      ". categorias";
+  }
+
+  .mes-destaque {
+    grid-area: destaque;
+  }
+
+  .mes-sinais-secao {
+    grid-area: sinais;
+  }
+
+  .mes-categorias-secao {
+    grid-area: categorias;
+  }
+
+  .mes-painel > .mes-vazio,
+  .mes-painel > .mes-esqueleto {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mes-alternar__icone,
+  .mes-comparacao__icone {
+    transition: none;
+  }
+}

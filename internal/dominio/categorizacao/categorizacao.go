@@ -74,7 +74,9 @@ func NovaRegra(id int64, cat categoria.ID, tipo Tipo, padrao string, prioridade 
 		// Padrao textual compara em maiusculas, como contraparte_norm.
 		r.Padrao = strings.ToUpper(padrao)
 	case TipoRegex:
-		compilada, err := regexp.Compile(padrao)
+		// (?i): a contraparte normalizada e maiuscula; regex escrita em
+		// minusculas casaria nunca e falharia em silencio.
+		compilada, err := regexp.Compile("(?i)" + padrao)
 		if err != nil {
 			return Regra{}, ErrRegexInvalida
 		}

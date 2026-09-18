@@ -6,10 +6,12 @@ package aplicacao
 import (
 	"context"
 	"crypto/rand"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
 
+	"github.com/gracianFelipe/caixa/internal/dominio/categoria"
 	"github.com/gracianFelipe/caixa/internal/dominio/categorizacao"
 	"github.com/gracianFelipe/caixa/internal/dominio/competencia"
 	"github.com/gracianFelipe/caixa/internal/dominio/dinheiro"
@@ -17,6 +19,9 @@ import (
 	"github.com/gracianFelipe/caixa/internal/dominio/identidade"
 	"github.com/gracianFelipe/caixa/internal/dominio/lancamento"
 )
+
+// ErrNaoEncontrado e devolvido quando o id nao corresponde a lancamento algum.
+var ErrNaoEncontrado = errors.New("lancamento nao encontrado")
 
 // Lancamentos e o servico de aplicacao do agregado. Ponteiro como receptor
 // porque a struct carrega dependencias compartilhadas e nao deve ser copiada.
@@ -87,6 +92,31 @@ func (s *Lancamentos) Capturar(ctx context.Context, valorTexto, contraparte, mei
 		Meio:        lancamento.Meio(meioTexto),
 		Contraparte: contraparte,
 	})
+}
+
+// Categorizar aplica categoria manual vinda do PWA: mesmo efeito do botao no
+// Telegram — atribui, aprende a regra exata e devolve o lancamento novo.
+func (s *Lancamentos) Categorizar(ctx context.Context, id identidade.ID, cat categoria.ID) (lancamento.Lancamento, error) {
+	l, existe, err := s.repo.PorID(ctx, id)
+	if err != nil {
+		return lancamento.Lancamento{}, fmt.Errorf("buscando lancamento: %w", err)
+	}
+	if !existe {
+		return lancamento.Lancamento{}, ErrNaoEncontrado
+	}
+
+	if err := s.repo.AtribuirCategoria(ctx, id, cat, lancamento.CategoriaManual); err != nil {
+		return lancamento.Lancamento{}, err
+	}
+	if l.ContraparteNorm != "" {
+		if err := s.regras.RegistrarAprendida(ctx, cat, l.ContraparteNorm); err != nil {
+			return lancamento.Lancamento{}, fmt.Errorf("aprendendo regra: %w", err)
+		}
+	}
+
+	l.CategoriaID = cat
+	l.CategoriaOrigem = lancamento.CategoriaManual
+	return l, nil
 }
 
 func (s *Lancamentos) eventoDeCriacao(l lancamento.Lancamento) (evento.Evento, error) {

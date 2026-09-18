@@ -1,0 +1,278 @@
+/* Tela "Relatório". Só tokens de app.css; nenhum hex solto. */
+
+.relatorio {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-5);
+}
+
+.relatorio__secao {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-3);
+}
+
+.relatorio__cabecalho-secao {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--espaco-3);
+}
+
+.relatorio__cabecalho-secao .titulo-secao {
+  margin: 0;
+}
+
+/* Resumo: grade de métricas, a principal ocupa a linha inteira. */
+.relatorio__grade {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--espaco-4);
+}
+
+.relatorio__metrica {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-1);
+  min-width: 0;
+}
+
+.relatorio__metrica .valor {
+  overflow-wrap: anywhere;
+}
+
+.relatorio__metrica--principal {
+  grid-column: 1 / -1;
+  padding-bottom: var(--espaco-3);
+  border-bottom: 1px solid var(--cor-borda);
+}
+
+@media (min-width: 768px) {
+  .relatorio__grade {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    align-items: end;
+  }
+
+  .relatorio__metrica--principal {
+    grid-column: 1 / -1;
+  }
+}
+
+/* Comparação com o mês anterior em barras CSS. */
+.relatorio__comparacao {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-3);
+}
+
+.relatorio__linha-barra {
+  display: grid;
+  grid-template-columns: minmax(0, 6.5rem) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--espaco-3);
+}
+
+.relatorio__linha-barra .barra {
+  display: block;
+  min-height: 10px;
+  border-radius: var(--raio-p);
+  background: var(--cor-superficie-2);
+  overflow: hidden;
+}
+
+.relatorio__linha-barra .barra__preenchido {
+  display: block;
+  height: 100%;
+  min-height: 10px;
+  width: var(--pct, 0%);
+  border-radius: inherit;
+  background: var(--cor-primaria);
+  transition: width var(--duracao) ease;
+}
+
+.relatorio__linha-barra:last-of-type .barra__preenchido {
+  background: var(--cor-texto-fraco);
+}
+
+.relatorio__valor-barra {
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.relatorio__variacao {
+  margin: 0;
+  font-size: 14px;
+  color: var(--cor-texto-fraco);
+}
+
+.relatorio__variacao--alta {
+  color: var(--cor-aviso);
+  font-weight: 600;
+}
+
+/* Sinais: um cartão por detector, borda lateral conta a severidade junto do ícone. */
+.relatorio__sinais {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--espaco-3);
+}
+
+@media (min-width: 768px) {
+  .relatorio__sinais {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.relatorio__sinal {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-3);
+  border-left: 4px solid var(--cor-aviso);
+}
+
+.relatorio__sinal--perigo {
+  border-left-color: var(--cor-perigo);
+}
+
+.relatorio__sinal-cabecalho {
+  display: flex;
+  align-items: center;
+  gap: var(--espaco-2);
+}
+
+.relatorio__sinal-icone {
+  flex: none;
+  display: inline-flex;
+  color: var(--cor-aviso);
+}
+
+.relatorio__sinal--perigo .relatorio__sinal-icone {
+  color: var(--cor-perigo);
+}
+
+.relatorio__sinal-icone svg,
+.relatorio__vazio-icone svg {
+  width: 24px;
+  height: 24px;
+}
+
+.relatorio__sinal-titulo {
+  flex: 1 1 auto;
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  min-width: 0;
+}
+
+.relatorio__sinal-cabecalho .sinal {
+  flex: none;
+  white-space: nowrap;
+}
+
+.relatorio__sinal-corpo {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--espaco-3);
+}
+
+.relatorio__sinal-quem {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-1);
+  min-width: 0;
+}
+
+.relatorio__sinal-nome {
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.relatorio__sinal-corpo .valor {
+  flex: none;
+}
+
+.relatorio__sinal-detalhe {
+  margin: 0;
+  font-size: 14px;
+  color: var(--cor-texto-fraco);
+}
+
+/* Estados vazio e de erro. */
+.relatorio__vazio-icone {
+  display: inline-flex;
+  padding: var(--espaco-3);
+  border-radius: 50%;
+  color: var(--cor-acento);
+  background: var(--cor-superficie-2);
+}
+
+.relatorio__vazio-icone--perigo {
+  color: var(--cor-perigo);
+}
+
+/* Texto bruto do relatório. */
+.relatorio__texto {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-3);
+}
+
+.relatorio__texto-resumo {
+  cursor: pointer;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  font-weight: 600;
+  border-radius: var(--raio-p);
+}
+
+.relatorio__texto-resumo:focus-visible {
+  outline: 2px solid var(--cor-primaria);
+  outline-offset: 2px;
+}
+
+.relatorio__texto-acoes {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.relatorio__pre {
+  margin: 0;
+  padding: var(--espaco-4);
+  border-radius: var(--raio-p);
+  background: var(--cor-superficie-2);
+  font: 14px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-variant-numeric: tabular-nums;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 60vh;
+  overflow: auto;
+}
+
+/* Esqueleto de carregamento. */
+.relatorio__esqueleto {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-3);
+}
+
+.relatorio__esqueleto-titulo {
+  height: 22px;
+  width: 40%;
+  border-radius: var(--raio-p);
+}
+
+.relatorio__esqueleto-cartao {
+  height: 120px;
+  border-radius: var(--raio);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .relatorio__linha-barra .barra__preenchido {
+    transition: none;
+  }
+}

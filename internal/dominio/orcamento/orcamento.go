@@ -4,6 +4,7 @@ package orcamento
 
 import (
 	"errors"
+	"math"
 
 	"github.com/gracianFelipe/caixa/internal/dominio/categoria"
 	"github.com/gracianFelipe/caixa/internal/dominio/competencia"
@@ -37,11 +38,26 @@ func Novo(cat categoria.ID, comp competencia.Competencia, limite dinheiro.Centav
 var Limiares = []int{80, 100}
 
 // Nivel devolve o maior limiar cruzado pelo gasto (0, 80 ou 100). O gasto
-// entra como magnitude positiva de saidas. Inteiro puro: gasto*100 nunca
-// estoura porque Analisar barra valores perto de MaxInt64/100.
+// entra como magnitude positiva de saidas. Inteiro puro, com guarda de
+// estouro: um valor tao grande que gasto*100 nao cabe em int64 esta, por
+// definicao, acima de qualquer limite razoavel — nivel maximo.
 func Nivel(gasto, limite dinheiro.Centavos) int {
 	if limite <= 0 || gasto <= 0 {
 		return 0
+	}
+	const tetoSeguro = dinheiro.Centavos(math.MaxInt64 / 100)
+	if gasto > tetoSeguro || limite > tetoSeguro {
+		if gasto >= limite {
+			return Limiares[len(Limiares)-1]
+		}
+		// Compara sem multiplicar: gasto/limite >= limiar/100.
+		nivel := 0
+		for _, limiar := range Limiares {
+			if gasto >= limite/100*dinheiro.Centavos(limiar) {
+				nivel = limiar
+			}
+		}
+		return nivel
 	}
 	nivel := 0
 	for _, limiar := range Limiares {
