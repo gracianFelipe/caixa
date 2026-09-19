@@ -84,8 +84,11 @@ numa entrevista técnica. Os contratos que o código obedece estão em
   idênticas no mesmo dia não colapsam; a seção "Últimos Lancamentos" do fim
   do arquivo (que repete movimentos) é descartada para não duplicar.
   Validado com o extrato real: 226 criados, reimportação 226 duplicados.
-  **Regra de uso: exportar sempre o mês fechado** — recorte parcial de dia
-  pode deslocar o ordinal.
+  A seção "Últimos Lancamentos" é lida com abate: repetição da tabela
+  principal sai, movimento inédito entra (a principal atrasa dias).
+  **Regra de uso: exportar sempre o período completo** (o Bradesco renomeia
+  históricos entre exports, então dedup entre arquivos não é confiável) e
+  conferir `SUM(valor_centavos)` contra o saldo real após importar.
 
 ## Pendências que dependem do dono
 

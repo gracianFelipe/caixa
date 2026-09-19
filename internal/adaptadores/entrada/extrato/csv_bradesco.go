@@ -59,9 +59,11 @@ func AnalisarCSV(dados []byte, fuso *time.Location) ([]Transacao, error) {
 	// Ordinais desempatam linhas identicas dentro do arquivo: sem isso, dois
 	// PIX iguais no mesmo dia colapsariam num so pela constraint de impressao.
 	ordinais := make(map[string]int)
+	// Creditos da tabela principal contra os quais a recapitulacao abate.
+	repetiveis := make(map[string]int)
 
 	var transacoes []Transacao
-	var viuCabecalho bool
+	var viuCabecalho, emRecapitulacao bool
 	for linha := 1; ; linha++ {
 		campos, err := leitor.Read()
 		if errors.Is(err, io.EOF) {
@@ -73,13 +75,15 @@ func AnalisarCSV(dados []byte, fuso *time.Location) ([]Transacao, error) {
 
 		if ehCabecalho(campos) {
 			if viuCabecalho {
-				// Segundo cabecalho: o Bradesco fecha o arquivo com uma secao
-				// "Ultimos Lancamentos" que REPETE os movimentos finais da
-				// tabela principal. Le-la duplicaria lancamentos reais — o
-				// ordinal daria #1 as linhas repetidas, gerando impressao
-				// nova e escapando da constraint. A primeira tabela e a
-				// unica fonte.
-				break
+				// Segundo cabecalho: comeca a secao "Ultimos Lancamentos".
+				// Ela NAO e confiavel nem como copia nem como fonte: num
+				// export repetiu o fim da tabela principal, no seguinte
+				// trouxe movimentos que a principal ainda nao tinha (a
+				// principal atrasa dias). Le-se em modo recapitulacao:
+				// tupla ja vista na principal e repeticao e sai; tupla
+				// inedita e movimento novo e entra.
+				emRecapitulacao = true
+				continue
 			}
 			viuCabecalho = true
 			continue
@@ -91,13 +95,25 @@ func AnalisarCSV(dados []byte, fuso *time.Location) ([]Transacao, error) {
 			return nil, fmt.Errorf("%w: linha %d", ErrLinhaCurta, linha)
 		}
 
-		t, err := lerLinhaCSV(campos, fuso, ordinais)
+		t, chave, err := lerLinhaCSV(campos, fuso, ordinais)
 		if err != nil {
 			// Posicao, nunca conteudo: a linha carrega valor e contraparte.
 			if errors.Is(err, errLinhaIgnorada) {
 				continue
 			}
 			return nil, fmt.Errorf("extrato: linha %d: %w", linha, err)
+		}
+		if emRecapitulacao {
+			if repetiveis[chave] > 0 {
+				// Ja veio na tabela principal: repeticao, nao movimento.
+				// O ordinal consumido em lerLinhaCSV e devolvido para nao
+				// deslocar a identidade de eventuais linhas ineditas iguais.
+				repetiveis[chave]--
+				ordinais[chave]--
+				continue
+			}
+		} else {
+			repetiveis[chave]++
 		}
 		transacoes = append(transacoes, t)
 	}
@@ -154,27 +170,29 @@ func ehDescartavel(campos []string) bool {
 	return false
 }
 
-func lerLinhaCSV(campos []string, fuso *time.Location, ordinais map[string]int) (Transacao, error) {
+// lerLinhaCSV devolve tambem a chave da tupla (data|historico|docto|valor):
+// e por ela que a recapitulacao abate repeticoes da tabela principal.
+func lerLinhaCSV(campos []string, fuso *time.Location, ordinais map[string]int) (Transacao, string, error) {
 	data := strings.TrimSpace(campos[colData])
 	historico := espacoSimples(campos[colHistorico])
 	documento := strings.TrimSpace(campos[colDocumento])
 
 	ocorridoEm, err := lerDataCSV(data, fuso)
 	if err != nil {
-		return Transacao{}, err
+		return Transacao{}, "", err
 	}
 
 	valor, err := lerValorDaLinha(campos[colCredito], campos[colDebito])
 	if err != nil {
-		return Transacao{}, err
+		return Transacao{}, "", err
 	}
 	// Saldo anterior e linhas informativas vem zeradas: evidencia sem fato.
 	if valor == 0 {
-		return Transacao{}, errLinhaIgnorada
+		return Transacao{}, "", errLinhaIgnorada
 	}
 
 	if historico == "" {
-		return Transacao{}, fmt.Errorf("%w: Historico", ErrCampoObrigatorio)
+		return Transacao{}, "", fmt.Errorf("%w: Historico", ErrCampoObrigatorio)
 	}
 	contraparte := historico
 	if runas := []rune(contraparte); len(runas) > lancamento.ContraparteMaxima {
@@ -198,7 +216,7 @@ func lerLinhaCSV(campos []string, fuso *time.Location, ordinais map[string]int) 
 		Contraparte: contraparte,
 		IDExterno:   "", // o CSV nao tem FITID; a identidade vive na impressao
 		Payload:     payload,
-	}, nil
+	}, chave, nil
 }
 
 // lerValorDaLinha resolve o sinal pela coluna, nao pelo numero: credito e

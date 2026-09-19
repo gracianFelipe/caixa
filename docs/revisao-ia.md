@@ -128,6 +128,21 @@ e regra: a leitura para no segundo cabeçalho.
 única defesa contra premissa errada. O tokenizador OFX fica no repo — código
 testado, custo zero, e outra conta bancária pode exportar OFX amanhã.
 
+**Adendo (2026-09-19, um dia depois): a correção da recapitulação também
+estava errada** — eco direto do caso 003. A regra "descarte a segunda
+tabela" nasceu de UM arquivo, em que ela repetia a principal. O export
+seguinte provou o contrário: a tabela principal do Bradesco atrasa dias, e
+a recapitulação era a única portadora dos movimentos de 18-21/09 (inclusive
+um PIX agendado futuro). Descartá-la perdia os lançamentos mais recentes;
+o banco somava R$ 694,50 contra R$ 210,23 do extrato. Regra final:
+recapitulação é lida com abate — tupla já vista na principal é repetição,
+tupla inédita é movimento. Auditoria que pegou: somar os lançamentos e
+conferir contra o saldo real informado pelo autor. Dois exports diferentes
+ainda ensinaram que o Bradesco RENOMEIA históricos entre exports
+("PIX QR CODE DINAMICO" → "TRANSFERENCIA PIX"), o que inviabiliza dedup
+textual entre arquivos — a operação registrada no README passa a ser:
+exportar sempre o período completo e conferir a soma contra o saldo.
+
 ## Decisões discutidas e mantidas (não são rejeições)
 
 Registradas para mostrar que houve decisão, não omissão.
