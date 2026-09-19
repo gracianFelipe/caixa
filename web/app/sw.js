@@ -2,7 +2,9 @@
 // Dado financeiro NUNCA entra em cache do navegador; o que fica offline e a
 // casca do app, que abre e avisa que esta sem rede.
 
-const CACHE = 'caixa-v1';
+// A versao entra no NOME do cache: trocar esta linha invalida o shell
+// inteiro. Sem isso, um deploy novo nunca chega a quem ja abriu o app.
+const CACHE = 'caixa-v2';
 
 const SHELL = [
   '/',
@@ -48,7 +50,22 @@ self.addEventListener('fetch', (ev) => {
     return;
   }
 
+  // stale-while-revalidate: responde do cache (rapido e funciona offline) e,
+  // em paralelo, busca da rede para atualizar o cache. Cache-first puro
+  // servia CSS/JS velhos para sempre — foi assim que uma tela continuou com
+  // a paleta antiga depois do redesign.
   ev.respondWith(
-    caches.match(ev.request).then((doCache) => doCache || fetch(ev.request))
+    caches.open(CACHE).then(async (cache) => {
+      const doCache = await cache.match(ev.request);
+      const daRede = fetch(ev.request)
+        .then((resposta) => {
+          if (resposta && resposta.ok && resposta.type === 'basic') {
+            cache.put(ev.request, resposta.clone());
+          }
+          return resposta;
+        })
+        .catch(() => doCache); // offline: fica com o que ja tinha
+      return doCache || daRede;
+    })
   );
 });

@@ -35,13 +35,23 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* .lancamentos__dia e a SECTION do grupo; o estilo do rotulo mora no
+   titulo. Quando text-transform ficava na section, ele cascateava para a
+   lista inteira e "R$" virava "r$" no valor. */
 .lancamentos__dia {
   margin: var(--espaco-5) 0 var(--espaco-2);
+}
+
+.lancamentos__dia-titulo {
+  margin: 0 0 var(--espaco-2);
   font-size: 14px;
   font-weight: 600;
   color: var(--cor-texto-fraco);
   text-transform: lowercase;
 }
+
+/* Valor nunca quebra linha: "-R$ 150,00" partido em duas e ilegivel. */
+.lancamentos__linha > .valor { white-space: nowrap; }
 
 .lancamentos__item {
   flex-direction: column;

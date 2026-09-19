@@ -88,7 +88,7 @@ function secaoResumo(rel, competenciaAtual) {
 
   const grade = el(
     'div',
-    { class: 'cartao relatorio__grade' },
+    { class: 'painel-hero relatorio__grade' },
     metrica('Saídas', saidas, { destaque: true, id: 'rel-saidas' }),
     metrica('Entradas', entradas, { entrada: true, id: 'rel-entradas' }),
     metrica('Saldo', saldo, { entrada: saldo >= 0, id: 'rel-saldo' }),

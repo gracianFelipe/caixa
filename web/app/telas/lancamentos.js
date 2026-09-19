@@ -21,6 +21,15 @@ const FILTROS = [
 const fmtDia = new Intl.DateTimeFormat('pt-BR', { day: 'numeric', month: 'long' });
 const fmtHora = new Intl.DateTimeFormat('pt-BR', { hour: '2-digit', minute: '2-digit' });
 
+// Extrato CSV nao traz hora: o lancamento fica a meia-noite local. Exibir
+// "00:00" seria inventar uma precisao que o dado nao tem — nesses casos a
+// hora simplesmente nao aparece.
+function horaDe(instante) {
+  const d = new Date(instante);
+  if (d.getHours() === 0 && d.getMinutes() === 0) return '';
+  return ' · ' + fmtHora.format(d);
+}
+
 // Preferências que sobrevivem à remontagem (troca de competência, ao vivo),
 // mas não são dados financeiros: ficam em memória.
 let filtroAtual = 'todos';
@@ -315,7 +324,7 @@ export default {
             el('span', { class: 'lancamentos__contraparte', text: l.contraparte || '(sem descrição)' }),
             el('span', {
               class: 'lancamentos__meta rotulo',
-              text: `${MEIOS[l.meio] ?? l.meio} · ${fmtHora.format(new Date(l.ocorrido_em))}`,
+              text: `${MEIOS[l.meio] ?? l.meio}${horaDe(l.ocorrido_em)}`,
             }),
           ),
           el('span', {

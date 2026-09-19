@@ -295,7 +295,13 @@ function montarShell() {
   rotulo.className = 'seletor-competencia__rotulo';
   const btProxima = botaoDeSeta('direita', 'Próximo mês', () => definirCompetencia(competencia.proxima(competenciaDaURL())));
   seletor.append(btAnterior, rotulo, btProxima);
-  cabecalho.append(titulo, seletor);
+  // Wrapper interno: o cabecalho pinta a largura toda (barra solida), mas o
+  // titulo e o seletor ficam no MESMO eixo do conteudo. Sem ele, em tela
+  // larga o titulo cola na borda e a pagina parece fora de esquadro.
+  const cabecalhoInterno = document.createElement('div');
+  cabecalhoInterno.className = 'cabecalho__interno';
+  cabecalhoInterno.append(titulo, seletor);
+  cabecalho.append(cabecalhoInterno);
 
   const conteudo = document.createElement('main');
   conteudo.id = 'conteudo';

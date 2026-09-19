@@ -299,7 +299,7 @@ export default {
 
 function resumo(linhas) {
   const comLimite = linhas.filter((l) => l.limite_centavos !== null && l.limite_centavos !== undefined);
-  const cartao = el('div', 'cartao orcamentos__resumo');
+  const cartao = el('div', 'painel-hero orcamentos__resumo');
   if (comLimite.length === 0) {
     cartao.append(
       el('p', 'rotulo', 'Nenhum limite definido'),
