@@ -14,22 +14,28 @@
 
 ## Overrides do projeto (prevalecem sobre o gerado abaixo)
 
-* **Tipografia:** pilha de sistema (`-apple-system, system-ui, "Segoe UI", Roboto, sans-serif`)
-  com `font-variant-numeric: tabular-nums` em todo número monetário. Sem Orbitron/JetBrains
-  e sem `@import` do Google Fonts: o PWA roda offline e um app financeiro não faz
-  requisição a terceiro.
-* **Estilo:** o "Exaggerated Minimalism" abaixo é de landing page; aqui é *dashboard*. Fica o
-  espírito (alto contraste, pouca decoração, um CTA por tela); sai o `clamp(3rem…12rem)`.
-  Número do mês em destaque (~2.5rem), o resto na escala 14/16/18/24.
-* **Navegação:** barra inferior com 4 destinos (Mês, Lançamentos, Relatório, Orçamentos),
-  ícones SVG inline (Lucide, traço 1.75) com rótulo, área de toque ≥ 44px,
-  `padding-bottom: env(safe-area-inset-bottom)`.
-* **Modo:** escuro por padrão (paleta abaixo) e claro por `prefers-color-scheme`; tokens
-  semânticos em `:root`, nunca hex solto em componente. Contraste ≥ 4.5:1 nos dois modos.
-* **Sem emoji como ícone. Sem gráfico de biblioteca:** barras horizontais em CSS puro para
-  "por categoria" (ordenadas desc, valor sempre visível — grade AAA do próprio guia).
-* **Sinais do relatório** usam ícone + texto, nunca só cor. Vermelho só para destrutivo/estouro.
-* **Sem inline script** (CSP `default-src 'self'`): todo JS em arquivos `.js`.
+> Spec 014: referência visual escolhida pelo autor é **parthean.com**
+> (via minimal.gallery). O gerado abaixo (navy escuro, Calistoga) foi
+> **rejeitado** — registro em docs/revisao-ia.md (007).
+
+* **Claro por padrão** (fundo #F7F7F9, cartões brancos, borda fininha),
+  escuro via `prefers-color-scheme`. Painel-herói lavanda
+  (`--cor-painel` → `--cor-painel-forte`, raio 24px) para o número do mês.
+* **Tipografia de sistema, sem CDN** (decisão da spec 010): display
+  serifada `Georgia, 'Times New Roman', serif` em títulos e no número
+  destacado; UI em `system-ui`; `tabular-nums` em todo valor monetário.
+* **Títulos em pergunta**, como a referência: "Para onde foi o dinheiro?",
+  "Quando saiu?", "O que merece atenção?".
+* **CTA em pílula preta** (`--cor-primaria` = tinta), uma por tela.
+* **Gráficos sem biblioteca:** donut em SVG próprio (stroke-dasharray,
+  ≤5 fatias + "outros", legenda com % e valor é o texto acessível) e
+  heatmap de calendário em grid CSS (escala `--calor-0..4` âmbar,
+  `aria-label` com o valor do dia em cada célula).
+* **Paleta de dados** `--dado-1..5` + `--dado-resto` (contraste ≥3:1 nos
+  dois modos); vermelho continua reservado a perigo/estouro.
+* **Navegação:** barra inferior com 4 destinos, ícones Lucide inline
+  (traço 1.75) com rótulo, toque ≥44px, `env(safe-area-inset-*)`.
+* **Sem emoji como ícone; sem inline script** (CSP `default-src 'self'`).
 
 ---
 

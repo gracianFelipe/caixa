@@ -24,6 +24,12 @@ const fmtHora = new Intl.DateTimeFormat('pt-BR', { hour: '2-digit', minute: '2-d
 // Preferências que sobrevivem à remontagem (troca de competência, ao vivo),
 // mas não são dados financeiros: ficam em memória.
 let filtroAtual = 'todos';
+
+// Deep link: /lancamentos?filtro=sem-categoria (o chip de pendentes do Mes).
+function filtroDaURL(ctx) {
+  const f = ctx.params.get('filtro');
+  if (f && FILTROS.some((x) => x.id === f)) filtroAtual = f;
+}
 let categoriasCache = null;
 
 // --- utilitários de DOM (sem innerHTML com dado do usuário) -----------------
@@ -86,6 +92,7 @@ export default {
   titulo: 'Lançamentos',
 
   async montar(raiz, ctx) {
+    filtroDaURL(ctx);
     garantirCss();
 
     const estado = {

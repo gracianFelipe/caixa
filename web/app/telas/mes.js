@@ -1,12 +1,18 @@
-// Tela "Mês" — a principal: destaque de saídas com comparação, entradas e
-// saldo, barras por categoria, sinais e captura rápida de lançamento.
-// Lê /api/relatorio/{competencia}; escreve só em POST /api/lancamentos.
+// Tela "Mês" — dashboard no padrão Parthean (spec 014): hero lavanda com as
+// saídas do mês, chip de pendentes, donut por categoria ("Para onde foi o
+// dinheiro?"), heatmap diário ("Quando saiu?"), sinais e captura rápida.
+// Lê /api/relatorio/{competencia} e /api/lancamentos; escreve só em
+// POST /api/lancamentos.
 import { api, ErroAPI, dinheiro, aoVivo, svg } from '../app.js';
 
 const MEIOS = [
   ['pix', 'Pix'], ['credito', 'Crédito'], ['debito', 'Débito'],
   ['boleto', 'Boleto'], ['dinheiro', 'Dinheiro'], ['transferencia', 'Transferência'],
 ];
+
+// Fatias do donut usam a paleta categorica dos tokens; 5 + "outros" no
+// maximo (regra no-pie-overuse do guia de design).
+const CORES_DONUT = ['--dado-1', '--dado-2', '--dado-3', '--dado-4', '--dado-5'];
 
 function el(tag, atributos = {}, ...filhos) {
   const n = document.createElement(tag);
@@ -51,7 +57,7 @@ function comparacao(atual, anterior) {
 
 function esqueleto() {
   return el('div', { class: 'mes', 'aria-busy': 'true' },
-    el('div', { class: 'cartao mes-esqueleto' },
+    el('div', { class: 'painel-hero mes-esqueleto' },
       el('div', { class: 'esqueleto mes-esqueleto--rotulo' }),
       el('div', { class: 'esqueleto mes-esqueleto--destaque' }),
       el('div', { class: 'esqueleto mes-esqueleto--linha' })),
@@ -59,6 +65,136 @@ function esqueleto() {
       el('div', { class: 'esqueleto mes-esqueleto--linha' }),
       el('div', { class: 'esqueleto mes-esqueleto--barra' }),
       el('div', { class: 'esqueleto mes-esqueleto--linha-curta' })));
+}
+
+// --- donut em SVG proprio (sem biblioteca, contrato da spec 010) ----------
+
+function donut(fatias) {
+  // stroke-dasharray sobre circulo: cada fatia e um arco proporcional.
+  const NS = 'http://www.w3.org/2000/svg';
+  const R = 15.9155; // circunferencia ~100, entao pct vira comprimento direto
+  const svgEl = document.createElementNS(NS, 'svg');
+  svgEl.setAttribute('viewBox', '0 0 42 42');
+  svgEl.setAttribute('class', 'mes-donut__grafico');
+  svgEl.setAttribute('role', 'img');
+  svgEl.setAttribute('aria-hidden', 'true'); // a legenda ao lado e o texto
+
+  let deslocamento = 25; // comeca no topo
+  for (const f of fatias) {
+    const c = document.createElementNS(NS, 'circle');
+    c.setAttribute('cx', '21');
+    c.setAttribute('cy', '21');
+    c.setAttribute('r', String(R));
+    c.setAttribute('fill', 'none');
+    c.setAttribute('stroke', `var(${f.cor})`);
+    c.setAttribute('stroke-width', '5');
+    c.setAttribute('stroke-dasharray', `${f.pct} ${100 - f.pct}`);
+    c.setAttribute('stroke-dashoffset', String(deslocamento));
+    svgEl.append(c);
+    deslocamento -= f.pct;
+  }
+  return svgEl;
+}
+
+function cartaoDonut(rel, totalPendentes, ctx) {
+  const cartao = el('section', { class: 'cartao mes-donut', 'aria-label': 'Gasto por categoria' },
+    el('h2', { class: 'titulo-secao', text: 'Para onde foi o dinheiro?' }));
+
+  if (rel.por_categoria.length === 0) {
+    cartao.append(el('p', { class: 'rotulo', text: 'nenhum gasto categorizado ainda' }));
+  } else {
+    const total = rel.por_categoria.reduce((s, c) => s + c.total_centavos, 0) || 1;
+    const principais = rel.por_categoria.slice(0, CORES_DONUT.length);
+    const resto = rel.por_categoria.slice(CORES_DONUT.length);
+
+    const fatias = principais.map((c, i) => ({
+      nome: c.nome || 'sem categoria',
+      valor: c.total_centavos,
+      pct: Math.max(1, Math.round((c.total_centavos * 100) / total)),
+      cor: CORES_DONUT[i],
+    }));
+    if (resto.length) {
+      const soma = resto.reduce((s, c) => s + c.total_centavos, 0);
+      fatias.push({ nome: 'outros', valor: soma, pct: Math.max(1, Math.round((soma * 100) / total)), cor: '--dado-resto' });
+    }
+    // Normaliza arredondamento para fechar 100.
+    const excesso = fatias.reduce((s, f) => s + f.pct, 0) - 100;
+    if (excesso !== 0) fatias[0].pct -= excesso;
+
+    const legenda = el('ul', { class: 'mes-donut__legenda lista' },
+      ...fatias.map((f) => el('li', { class: 'mes-donut__linha' },
+        el('span', { class: 'mes-donut__cor', style: `background: var(${f.cor})`, 'aria-hidden': 'true' }),
+        el('span', { class: 'mes-donut__pct valor', text: `${f.pct}%` }),
+        el('span', { class: 'mes-donut__nome', text: f.nome }),
+        el('span', { class: 'valor mes-donut__valor', text: dinheiro.formatar(f.valor) }))));
+
+    const centro = el('div', { class: 'mes-donut__centro' },
+      el('span', { class: 'rotulo', text: 'total' }),
+      el('span', { class: 'valor', text: dinheiro.formatar(total) }));
+
+    cartao.append(el('div', { class: 'mes-donut__corpo' },
+      el('div', { class: 'mes-donut__anel' }, donut(fatias), centro),
+      legenda));
+  }
+
+  if (totalPendentes > 0) {
+    cartao.append(el('button', {
+      class: 'mes-pendentes',
+      type: 'button',
+      onclick: () => ctx.navegar(`/lancamentos?competencia=${encodeURIComponent(ctx.competencia)}&filtro=sem-categoria`),
+    },
+      icone('editar', 'mes-pendentes__icone'),
+      el('span', { text: `${totalPendentes} sem categoria — toque para classificar` }),
+      icone('direita', 'mes-pendentes__seta')));
+  }
+  return cartao;
+}
+
+// --- heatmap de calendario (grid CSS, sem biblioteca) ----------------------
+
+function cartaoHeatmap(lancamentos, comp) {
+  const cartao = el('section', { class: 'cartao mes-calor', 'aria-label': 'Gasto por dia' },
+    el('h2', { class: 'titulo-secao', text: 'Quando saiu?' }));
+
+  const [ano, mesNum] = comp.split('-').map(Number);
+  const dias = new Date(ano, mesNum, 0).getDate();
+  const porDia = new Array(dias + 1).fill(0);
+  for (const l of lancamentos) {
+    if (l.valor_centavos >= 0) continue;
+    const d = new Date(l.ocorrido_em);
+    if (d.getFullYear() === ano && d.getMonth() + 1 === mesNum) {
+      porDia[d.getDate()] += -l.valor_centavos;
+    }
+  }
+  const maior = Math.max(...porDia);
+  if (maior === 0) {
+    cartao.append(el('p', { class: 'rotulo', text: 'nenhuma saída neste mês' }));
+    return cartao;
+  }
+
+  // Intensidade em 4 degraus proporcionais ao maior dia do mes.
+  const degrau = (v) => v === 0 ? 0 : Math.min(4, 1 + Math.trunc((v * 4) / (maior + 1)));
+
+  const grade = el('div', { class: 'mes-calor__grade', role: 'list' });
+  // Celulas vazias ate o dia da semana do dia 1 (semana comeca no domingo).
+  const primeiro = new Date(ano, mesNum - 1, 1).getDay();
+  for (let i = 0; i < primeiro; i++) grade.append(el('span', { class: 'mes-calor__vazio', 'aria-hidden': 'true' }));
+
+  let diaMaior = 1;
+  for (let d = 1; d <= dias; d++) {
+    if (porDia[d] > porDia[diaMaior]) diaMaior = d;
+    const celula = el('span', {
+      class: `mes-calor__dia mes-calor__dia--${degrau(porDia[d])}`,
+      role: 'listitem',
+      'aria-label': `dia ${d}: ${porDia[d] ? dinheiro.formatar(porDia[d]) : 'sem saída'}`,
+      title: `dia ${d}: ${porDia[d] ? dinheiro.formatar(porDia[d]) : '—'}`,
+    }, el('span', { class: 'mes-calor__num', text: String(d) }));
+    grade.append(celula);
+  }
+  cartao.append(grade);
+  cartao.append(el('p', { class: 'rotulo mes-calor__resumo', text:
+    `maior dia: ${diaMaior} (${dinheiro.formatar(porDia[diaMaior])})` }));
+  return cartao;
 }
 
 export default {
@@ -77,9 +213,12 @@ export default {
 
     async function carregar() {
       raiz.replaceChildren(esqueleto());
-      let rel;
+      let rel, lancs;
       try {
-        rel = await api.get('/relatorio/' + ctx.competencia);
+        [rel, lancs] = await Promise.all([
+          api.get('/relatorio/' + ctx.competencia),
+          api.get(`/lancamentos?competencia=${encodeURIComponent(ctx.competencia)}`),
+        ]);
       } catch (e) {
         if (!vivo) return;
         raiz.replaceChildren(el('div', { class: 'vazio' },
@@ -90,65 +229,49 @@ export default {
         return;
       }
       if (!vivo) return;
-      renderizar(rel);
+      renderizar(rel, lancs ?? []);
     }
 
-    function renderizar(rel) {
+    function renderizar(rel, lancs) {
       const teveMovimento = rel.total_saidas_centavos > 0 || rel.total_entradas_centavos > 0;
-
       const painel = el('div', { class: 'mes-painel' });
 
-      // --- destaque ---
-      const destaque = el('section', { class: 'cartao mes-destaque', 'aria-label': 'Resumo do mês' },
-        el('p', { class: 'rotulo', text: 'saídas do mês' }),
+      // --- hero lavanda ---
+      const destaque = el('section', { class: 'painel-hero mes-destaque', 'aria-label': 'Resumo do mês' },
+        el('p', { class: 'rotulo mes-destaque__rotulo', text: 'saídas do mês' }),
         el('p', { class: 'valor valor--destaque', text: dinheiro.formatar(rel.total_saidas_centavos) }));
 
       const comp = comparacao(rel.total_saidas_centavos, rel.saidas_mes_anterior_centavos);
       if (comp) {
-        const p = el('p', { class: 'mes-comparacao ' + (comp.subiu ? 'mes-comparacao--sobe' : 'mes-comparacao--desce') },
+        destaque.append(el('p', { class: 'mes-comparacao ' + (comp.subiu ? 'mes-comparacao--sobe' : 'mes-comparacao--desce') },
           icone(comp.subiu ? 'direita' : 'esquerda', 'mes-comparacao__icone'),
-          el('span', { text: `${comp.pct > 0 ? '+' : ''}${comp.pct}% vs ${dinheiro.formatar(rel.saidas_mes_anterior_centavos)} do mês anterior` }));
-        destaque.append(p);
+          el('span', { text: `${comp.pct > 0 ? '+' : ''}${comp.pct}% vs ${dinheiro.formatar(rel.saidas_mes_anterior_centavos)} do mês anterior` })));
       } else {
         destaque.append(el('p', { class: 'mes-comparacao', text: 'sem base de comparação no mês anterior' }));
       }
 
       destaque.append(el('div', { class: 'mes-totais' },
-        el('p', {},
-          el('span', { class: 'rotulo', text: 'entradas ' }),
+        el('div', { class: 'mes-total' },
+          el('span', { class: 'rotulo', text: 'entradas' }),
           el('span', { class: 'valor valor--entrada', text: dinheiro.formatar(rel.total_entradas_centavos) })),
-        el('p', {},
-          el('span', { class: 'rotulo', text: 'saldo ' }),
+        el('div', { class: 'mes-total' },
+          el('span', { class: 'rotulo', text: 'saldo do mês' }),
           el('span', {
             class: 'valor ' + (rel.saldo_centavos >= 0 ? 'valor--entrada' : 'valor--saida'),
             text: dinheiro.formatar(rel.saldo_centavos),
           }))));
       painel.append(destaque);
 
-      // --- por categoria ---
-      const categorias = el('section', { class: 'cartao mes-categorias', 'aria-label': 'Gasto por categoria' },
-        el('h2', { class: 'titulo-secao', text: 'por categoria' }));
-      if (rel.por_categoria.length === 0) {
-        categorias.append(el('p', { class: 'rotulo', text: 'nenhum gasto categorizado ainda' }));
-      } else {
-        const maior = rel.por_categoria[0].total_centavos || 1;
-        for (const c of rel.por_categoria) {
-          const pct = Math.max(2, Math.trunc((c.total_centavos * 100) / maior));
-          const preenchido = el('div', { class: 'barra__preenchido' });
-          preenchido.style.setProperty('--pct', pct + '%');
-          categorias.append(el('div', { class: 'mes-categoria' },
-            el('div', { class: 'mes-categoria__nome' },
-              el('span', { text: c.nome || 'sem categoria' }),
-              el('span', { class: 'mes-categoria__qtd rotulo', text: ` (${c.quantidade})` }),
-              el('span', { class: 'valor', text: ' ' + dinheiro.formatar(c.total_centavos) })),
-            el('div', { class: 'barra' }, preenchido)));
-        }
-      }
-      painel.append(categorias);
+      // --- donut + pendentes ---
+      const pendentes = lancs.filter((l) => l.categoria_id == null).length;
+      painel.append(cartaoDonut(rel, pendentes, ctx));
+
+      // --- heatmap ---
+      painel.append(cartaoHeatmap(lancs, ctx.competencia));
 
       // --- sinais ---
       const sinais = el('section', { class: 'cartao mes-sinais', 'aria-label': 'Sinais de alerta' },
-        el('h2', { class: 'titulo-secao', text: 'sinais' }));
+        el('h2', { class: 'titulo-secao', text: 'O que merece atenção?' }));
       if (rel.sinais.length === 0) {
         sinais.append(el('p', { class: 'rotulo' },
           icone('ok'), el('span', { text: ' nenhum sinal de alerta' })));
