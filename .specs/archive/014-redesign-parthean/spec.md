@@ -62,3 +62,34 @@ dado da API. Valores monetários seguem indo só para o DOM, nunca para log.
 `gofmt`/`vet`/`test` (embed recompila), navegador em 375px e desktop,
 login → Mês com dados reais (240 lançamentos), modo claro e escuro,
 `prefers-reduced-motion`.
+
+## Adendo (2026-09-19): revisão no navegador do autor
+
+Revisão visual no Chrome do autor (1555px, modo escuro) achou seis defeitos
+que a verificação no painel embutido não pegou:
+
+1. **Service worker servia CSS obsoleto.** `CACHE = 'caixa-v1'` fixo +
+   cache-first puro: a tela Relatório continuou com a paleta anterior ao
+   redesign. Corrigido com nome de cache versionado (`caixa-v2`) e
+   **stale-while-revalidate** — responde do cache (offline continua
+   funcionando) e atualiza em segundo plano. Custo assumido: quem já tinha
+   o v1 precisa de um ciclo a mais para ver a versão nova.
+2. **Cabeçalho fora do eixo do conteúdo.** Título colado na borda da janela
+   enquanto os cartões ficavam centralizados. Agora `.cabecalho__interno`
+   tem a mesma `max-width` e o mesmo padding do `#conteudo`.
+3. **Cabeçalho translúcido** deixava o texto passar borrado por trás ao
+   rolar. Fundo sólido: legibilidade acima do efeito.
+4. **Barra inferior esticada por 1500px** no desktop. A partir de 1024px
+   ela vira **barra lateral** (regra `adaptive-navigation` do guia). O
+   recuo vai no `body`, não no cabeçalho/conteúdo — com padding neles, o
+   `margin: 0 auto` continuava centralizando na janela inteira.
+5. **`text-transform: lowercase` cascateando.** A regra era do título do
+   dia mas estava na `<section>` do grupo: "R$" virava "r$" em todo valor
+   monetário da tela Lançamentos. Movida para o próprio título.
+6. **Hora falsa `00:00`.** O CSV não traz hora e o lançamento fica à
+   meia-noite; exibir isso inventava precisão inexistente. A hora agora só
+   aparece quando existe de verdade.
+
+Mais: valor não quebra mais linha, `clamp()` no número do hero (a 3rem fixos
+"R$ 12.345,67" não cabia em 375px) e os resumos de Relatório e Orçamentos
+usam o mesmo painel lavanda do Mês.

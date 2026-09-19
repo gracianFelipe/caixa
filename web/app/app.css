@@ -54,6 +54,8 @@
 
   --duracao: 200ms;
   --alt-nav: 64px;
+  --largura-conteudo: 720px;
+  --largura-lateral: 232px;   /* barra lateral a partir de 1024px */
 }
 
 @media (prefers-color-scheme: dark) {
@@ -127,15 +129,26 @@ a { color: inherit; }
   position: sticky;
   top: 0;
   z-index: 20;
+  /* Sem padding lateral aqui: ele vive no __interno, para que a caixa do
+     cabecalho seja IGUAL a do #conteudo (mesma largura, mesmo padding) e o
+     titulo caia na mesma vertical dos cartoes. */
+  padding: var(--espaco-3) 0;
+  padding-top: calc(var(--espaco-3) + env(safe-area-inset-top));
+  /* Solido, nao translucido: com backdrop-filter o conteudo aparecia
+     borrado por tras da barra ao rolar. Legibilidade > efeito. */
+  background: var(--cor-fundo);
+  border-bottom: 1px solid var(--cor-borda);
+}
+
+/* Mesmo eixo do #conteudo, senao o titulo cola na borda da janela. */
+.cabecalho__interno {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--espaco-3);
-  padding: var(--espaco-3) var(--espaco-4);
-  padding-top: calc(var(--espaco-3) + env(safe-area-inset-top));
-  background: color-mix(in srgb, var(--cor-fundo) 88%, transparent);
-  backdrop-filter: blur(8px);
-  border-bottom: 1px solid var(--cor-borda);
+  max-width: var(--largura-conteudo);
+  margin: 0 auto;
+  padding-inline: var(--espaco-4);
 }
 
 .cabecalho__titulo {
@@ -161,7 +174,7 @@ a { color: inherit; }
 }
 
 #conteudo {
-  max-width: 720px;
+  max-width: var(--largura-conteudo);
   margin: 0 auto;
   padding: var(--espaco-4);
   padding-bottom: calc(var(--alt-nav) + var(--espaco-5) + env(safe-area-inset-bottom));
@@ -199,6 +212,49 @@ a { color: inherit; }
 .nav-inferior__item[aria-current="page"] { color: var(--cor-texto); }
 
 .nav-inferior__item svg { width: 24px; height: 24px; }
+
+/* Em tela larga a barra inferior vira lateral: quatro itens esticados por
+   1500px nao sao navegacao, sao uma regua. Regra adaptive-navigation do
+   guia de UX (>=1024px prefere sidebar). */
+@media (min-width: 1024px) {
+  .nav-inferior {
+    inset: 0 auto 0 0;
+    width: var(--largura-lateral);
+    height: auto;
+    flex-direction: column;
+    justify-content: flex-start;
+    gap: var(--espaco-1);
+    padding: var(--espaco-5) var(--espaco-3);
+    background: var(--cor-fundo);
+    border-top: 0;
+    border-right: 1px solid var(--cor-borda);
+  }
+
+  .nav-inferior__item {
+    flex: 0 0 auto;
+    flex-direction: row;
+    justify-content: flex-start;
+    gap: var(--espaco-3);
+    padding: 0 var(--espaco-3);
+    border-radius: 999px;
+    font-size: 15px;
+  }
+
+  .nav-inferior__item[aria-current="page"] {
+    background: var(--cor-painel);
+    color: var(--cor-texto);
+  }
+
+  /* O recuo vai no BODY, nao no cabecalho/conteudo: com padding-left neles,
+     o `margin: 0 auto` continuava centralizando na janela inteira e a
+     coluna saia do eixo. Assim a lateral (fixed) fica fora do fluxo e todo
+     o resto se centraliza no espaco que sobra. */
+  body { padding-left: var(--largura-lateral); }
+
+  #conteudo { padding-bottom: var(--espaco-6); }
+
+  .toast-regiao { bottom: var(--espaco-5); }
+}
 
 .oculto { display: none !important; }
 
@@ -253,7 +309,9 @@ a { color: inherit; }
 
 .valor--destaque {
   font-family: var(--fonte-display);
-  font-size: 3rem;
+  /* Fixo em 3rem, "R$ 12.345,67" nao cabe em 375px. O clamp encolhe o
+     numero no celular sem perder o impacto no desktop. */
+  font-size: clamp(2.25rem, 9.5vw, 3rem);
   font-weight: 700;
   line-height: 1.1;
   letter-spacing: -0.02em;

@@ -163,6 +163,18 @@ Georgia (serifada de sistema, presente em todo SO) no lugar de fonte de
 CDN. O custo: Georgia é menos distintiva que uma serifada display; o
 benefício: zero requisição externa e zero FOIT. Trade-off consciente.
 
+**Adendo — o redesign passou no meu teste e falhou no do autor.** Verifiquei
+o redesign no navegador embutido e dei por bom. Aberto no Chrome do autor,
+em tela larga, seis defeitos apareceram de uma vez: cabeçalho fora do eixo
+do conteúdo, barra inferior esticada por 1500px, `text-transform` do título
+do dia cascateando e transformando "R$" em "r$" em toda a tela de
+Lançamentos, hora `00:00` inventada para dado que não tem hora, e — o pior
+— o service worker com cache-first e nome de cache fixo servindo o CSS
+anterior ao redesign. Nenhum deles aparece em 375px, que foi onde testei.
+Lição registrada: verificação de front precisa rodar no ambiente real do
+usuário (largura, tema do SO, service worker já instalado), não só no
+viewport que eu escolhi.
+
 ## Decisões discutidas e mantidas (não são rejeições)
 
 Registradas para mostrar que houve decisão, não omissão.
