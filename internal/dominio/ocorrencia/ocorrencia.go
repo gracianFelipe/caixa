@@ -21,12 +21,13 @@ const (
 	OrigemExtratoOFX Origem = 2
 	OrigemEmailBanco Origem = 3
 	OrigemTelegram   Origem = 4
+	OrigemExtratoCSV Origem = 5
 )
 
 // EhValida informa se a origem existe na lista fechada.
 func (o Origem) EhValida() bool {
 	switch o {
-	case OrigemManual, OrigemExtratoOFX, OrigemEmailBanco, OrigemTelegram:
+	case OrigemManual, OrigemExtratoOFX, OrigemEmailBanco, OrigemTelegram, OrigemExtratoCSV:
 		return true
 	}
 	return false

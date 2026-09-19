@@ -1,0 +1,22 @@
+﻿Extrato de: Ag: 0000 | Conta: 00000-0;;;;;
+Data;Histórico;Docto.;Crédito (R$);Débito (R$);Saldo (R$)
+01/03/2026;COD. LANC. 0;0;0,00; ;0,00
+01/03/2026;PIX RECEBIDO;1000001;1.234,56; ;1.234,56
+02/03/2026;PIX ENVIADO;1000002; ;50,00;1.184,56
+02/03/2026;PIX ENVIADO;1000002; ;50,00;1.134,56
+03/03/2026;PAGTO ELETRON  COBRANCA;1000003; ;100,00;1.034,56
+04/03/2026;SAQUE CARTAO TRANSF PIX*;1000004; ;20,00;1.014,56
+05/03/2026;GASTOS CARTAO DE CREDITO;1000005; ;14,56;1.000,00
+06/03/2026;TRANSF.MMA.TITULARIDADE*;1000006; ;1.000,00;0,00
+
+;;;;;
+Filtro de resultados - Movimentação entre:  01/03/2026 e 06/03/2026;;;;;
+;;;;;
+Os dados acima tem como base 06/03/2026 às 20:00 e estão sujeitos a alterações.;;;
+;;;;;
+Últimos Lancamentos;;;;;
+Data;Histórico;Docto.;Crédito (R$);Débito (R$);
+05/03/2026;GASTOS CARTAO DE CREDITO;1000005; ;14,56;
+06/03/2026;TRANSF.MMA.TITULARIDADE*;1000006; ;1.000,00;
+
+;;Total;1.234,56;1.234,56;0,00;

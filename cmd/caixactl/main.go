@@ -1,5 +1,6 @@
 // Comando caixactl reune as operacoes de linha de comando do Caixa:
-// `migrar` aplica as migracoes embutidas; `importar` carrega extratos OFX.
+// `migrar` aplica as migracoes embutidas; `importar` carrega extratos OFX ou
+// CSV do Bradesco (o parser e a origem saem da extensao do arquivo).
 package main
 
 import (
@@ -9,6 +10,8 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
+	"strings"
 	"time"
 	_ "time/tzdata" // caixactl calcula competencia: precisa do fuso no Windows
 
@@ -27,7 +30,7 @@ import (
 	"github.com/gracianFelipe/caixa/migracoes"
 )
 
-const uso = "uso: caixactl <migrar | importar arquivo.ofx [...] | orcamento -categoria N -limite \"R$ X\" [-competencia AAAA-MM] | senha>"
+const uso = "uso: caixactl <migrar | importar arquivo.(ofx|csv) [...] | orcamento -categoria N -limite \"R$ X\" [-competencia AAAA-MM] | senha>"
 
 func main() {
 	// CLI: texto legivel em stderr; stdout fica livre para dados.
@@ -218,7 +221,19 @@ func importar(ctx context.Context, caminhos []string, log *slog.Logger) error {
 			return fmt.Errorf("lendo %s: %w", caminho, err)
 		}
 
-		transacoes, err := extrato.Analisar(dados, fuso)
+		// A extensao escolhe o parser e a origem: o OFX traz FITID do banco,
+		// o CSV tem identidade sintetizada. Sao evidencias de qualidade
+		// diferente e a conciliacao pontua por origem — nao podem se misturar.
+		var (
+			transacoes []extrato.Transacao
+			origem     = ocorrencia.OrigemExtratoOFX
+		)
+		if strings.EqualFold(filepath.Ext(caminho), ".csv") {
+			origem = ocorrencia.OrigemExtratoCSV
+			transacoes, err = extrato.AnalisarCSV(dados, fuso)
+		} else {
+			transacoes, err = extrato.Analisar(dados, fuso)
+		}
 		if err != nil {
 			return fmt.Errorf("%s: %w", caminho, err)
 		}
@@ -235,7 +250,7 @@ func importar(ctx context.Context, caminhos []string, log *slog.Logger) error {
 			})
 		}
 
-		resumo, err := servico.Importar(ctx, ocorrencia.OrigemExtratoOFX, itens)
+		resumo, err := servico.Importar(ctx, origem, itens)
 		// Contagens em stdout; linha de extrato (valor, contraparte) jamais.
 		fmt.Printf("%s: %d criados, %d conciliados, %d provisorios, %d duplicados, %d ignorados\n",
 			caminho, resumo.Criados, resumo.Conciliados, resumo.Provisorios, resumo.Duplicados, resumo.Ignorados)

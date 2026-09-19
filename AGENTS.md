@@ -177,8 +177,10 @@ Fica na raiz: `internal/aplicacao` (casos de uso + `portas.go`),
 `internal/adaptadores/{entrada/web, entrada/extrato, saida/postgres, saida/relogio, saida/telegram, saida/senha}` e `entrada/email{,/bradesco}` (IMAP via
 go-imap/v2 no transporte; parser do .eml em stdlib pura, fixtures
 sintéticas — validação com alertas reais pendente)
-(`extrato` é o tokenizador OFX próprio — SGML, Windows-1252, dinheiro sem
-float; heurística de meio ajustável com dados reais),
+(`extrato` lê OFX — tokenizador SGML próprio, Windows-1252 — e o CSV do
+Bradesco, que é o formato real do autor: sem FITID, identidade por
+impressão + ordinal, seção de recapitulação descartada; origens distintas
+`extrato_ofx`/`extrato_csv`; dinheiro sem float nos dois),
 `cmd/api` (serve também o PWA embutido de `web/` e o hub WebSocket),
 `cmd/worker` (outbox, long polling do Telegram, agendador do relatório
 mensal), `cmd/caixactl`
