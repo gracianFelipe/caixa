@@ -21,7 +21,7 @@ numa entrevista técnica. Os contratos que o código obedece estão em
 * **003** — tokenizador OFX próprio (SGML, Windows-1252, dinheiro sem float,
   fuzz) e `caixactl importar`: linha de extrato vira ocorrência (evidência) +
   lançamento (fato); reimportar é seguro por constraint, não por lógica.
-  *Pendente: validar contra OFX real do Bradesco.*
+  *O Bradesco do autor não exporta OFX — ver spec 013.*
 
 * **004** — categorias fixas + categorização determinística por regras
   (precedência total: prioridade → exata>prefixo>contem>regex → tamanho → id;
@@ -78,14 +78,21 @@ numa entrevista técnica. Os contratos que o código obedece estão em
   evidência em vez de duplicar. *Pendente: validar com .eml reais — é o
   risco nº 1 do plano, e as fixtures são sintéticas por decisão.*
 
+* **013** — extrato **CSV** do Bradesco: o Internet Banking do autor não
+  exporta OFX, só CSV (`;`, UTF-8 com BOM, crédito e débito em colunas,
+  sem FITID). Identidade sintetizada por impressão + ordinal — duas linhas
+  idênticas no mesmo dia não colapsam; a seção "Últimos Lancamentos" do fim
+  do arquivo (que repete movimentos) é descartada para não duplicar.
+  Validado com o extrato real: 226 criados, reimportação 226 duplicados.
+  **Regra de uso: exportar sempre o mês fechado** — recorte parcial de dia
+  pode deslocar o ordinal.
+
 ## Pendências que dependem do dono
 
 | O quê | Como |
 |---|---|
-| OFX real do Bradesco | exportar para `extratos/` e rodar `caixactl importar` |
 | Bot do Telegram | criar no @BotFather; `CAIXA_TELEGRAM_TOKEN` e `_CHAT_ID` no `local.ps1` |
 | Alertas por e-mail | senha de app no `local.ps1` (`CAIXA_IMAP_*`); guardar 2-3 `.eml` reais em `extratos/` para calibrar o parser |
-| Login do PWA | `caixactl senha` → `CAIXA_USUARIO`/`CAIXA_SENHA_HASH` |
 | Deploy | seguir [`docs/deploy.md`](docs/deploy.md) |
 
 ## Arquitetura em uma frase

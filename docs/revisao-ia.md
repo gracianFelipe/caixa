@@ -101,6 +101,33 @@ errado**, **como foi pego**, **o que entrou no lugar**.
   tipografia de landing page, rejeitados: app financeiro offline não faz
   requisição a terceiros).
 
+## 006 — Parser planejado para um formato que o banco não exporta
+
+**Quando:** 2026-09-19, spec 013.
+
+**O que o plano (escrito com IA) assumia:** importação de extrato por OFX,
+formato clássico de conciliação bancária. A spec 003 construiu o tokenizador
+SGML completo, com fuzz, sobre fixtures sintéticas — a regra "não escrever o
+parser sem ver o arquivo real" foi conscientemente flexibilizada quando o
+autor autorizou execução contínua.
+
+**O que a realidade mostrou:** o Internet Banking do Bradesco do autor não
+oferece exportação OFX. Só CSV. O risco não era "o parser está errado"; era
+"o formato de entrada não existe para este usuário". Nenhuma quantidade de
+fuzz pega isso: é risco de premissa, não de código.
+
+**E o CSV real ainda ensinou o que fixture nenhuma continha:** o arquivo
+termina com uma seção "Últimos Lancamentos" que REPETE os movimentos finais
+da tabela principal. A primeira versão do leitor (desta sessão, também
+gerada com IA) teria importado a repetição como lançamentos novos — o
+ordinal anti-colapso viraria gerador de duplicata. Pego ao rodar contra o
+arquivo real antes do commit; virou teste (`TestAnalisarCSVIgnoraRecapitulacao`)
+e regra: a leitura para no segundo cabeçalho.
+
+**Lição:** validar cedo contra o dado real não é etapa de polimento, é a
+única defesa contra premissa errada. O tokenizador OFX fica no repo — código
+testado, custo zero, e outra conta bancária pode exportar OFX amanhã.
+
 ## Decisões discutidas e mantidas (não são rejeições)
 
 Registradas para mostrar que houve decisão, não omissão.
