@@ -33,9 +33,10 @@ func TestAnalisarCSVFixtureSintetica(t *testing.T) {
 	}
 
 	// A linha COD. LANC. 0 esta zerada e nao vira lancamento; cabecalho do
-	// banco, titulos e rodape tambem saem.
-	if len(transacoes) != 7 {
-		t.Fatalf("transacoes = %d, quero 7", len(transacoes))
+	// banco, titulos e rodape tambem saem. Da recapitulacao entram SO as duas
+	// linhas ineditas (dias 07 e 08); as repetidas (05 e 06) sao abatidas.
+	if len(transacoes) != 9 {
+		t.Fatalf("transacoes = %d, quero 9", len(transacoes))
 	}
 
 	quero := []struct {
@@ -51,6 +52,8 @@ func TestAnalisarCSVFixtureSintetica(t *testing.T) {
 		{4, -2000, lancamento.MeioPix, "SAQUE CARTAO TRANSF PIX*"},
 		{5, -1456, lancamento.MeioCredito, "GASTOS CARTAO DE CREDITO"},
 		{6, -100000, lancamento.MeioTransferencia, "TRANSF.MMA.TITULARIDADE*"},
+		{7, 3000, lancamento.MeioPix, "PIX RECEBIDO"},
+		{8, -1000, lancamento.MeioPix, "TRANSFERENCIA PIX"},
 	}
 
 	for i, q := range quero {
@@ -242,9 +245,10 @@ func FuzzAnalisarCSV(f *testing.F) {
 	})
 }
 
-// A secao "Ultimos Lancamentos" do fim do arquivo REPETE os movimentos da
-// tabela principal. Se ela fosse lida, o ordinal daria #1 as repeticoes e a
-// impressao nova escaparia da constraint: lancamento real duplicado no banco.
+// A secao "Ultimos Lancamentos" ora repete o fim da tabela principal, ora
+// traz movimentos que a principal ainda nao tem (ela atrasa dias). A regra:
+// tupla ja vista e abatida como repeticao; tupla inedita entra como
+// movimento. Aqui, GASTOS CARTAO aparece nas duas tabelas e vale uma vez.
 func TestAnalisarCSVIgnoraRecapitulacao(t *testing.T) {
 	dados, err := os.ReadFile("testdata/sintetico_bradesco.csv")
 	if err != nil {
