@@ -143,6 +143,26 @@ ainda ensinaram que o Bradesco RENOMEIA históricos entre exports
 textual entre arquivos — a operação registrada no README passa a ser:
 exportar sempre o período completo e conferir a soma contra o saldo.
 
+## 007 — Gerador de design contradito pela referência do usuário
+
+**Quando:** 2026-09-19, spec 014 (redesign do PWA).
+
+**O que a skill ui-ux-pro-max sugeriu:** para "personal finance dashboard",
+paleta navy escuro (#0F172A) com azul/verde e fonte display Calistoga via
+Google Fonts.
+
+**Por que foi rejeitado:** (1) o autor apontou uma referência concreta —
+parthean.com — que é o oposto: clara, quase branca, painéis lavanda,
+serifada editorial. Recomendação genérica não vence referência escolhida
+pelo usuário. (2) Calistoga viria de CDN, e a decisão da spec 010
+(revisao-ia 005) proíbe requisição a terceiros no PWA offline — a regra
+antiga venceu a sugestão nova, que nem sabia da restrição.
+
+**O que ficou:** paleta Parthean com tokens próprios nos dois modos, e
+Georgia (serifada de sistema, presente em todo SO) no lugar de fonte de
+CDN. O custo: Georgia é menos distintiva que uma serifada display; o
+benefício: zero requisição externa e zero FOIT. Trade-off consciente.
+
 ## Decisões discutidas e mantidas (não são rejeições)
 
 Registradas para mostrar que houve decisão, não omissão.
