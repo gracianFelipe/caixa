@@ -132,9 +132,9 @@ testado, custo zero, e outra conta bancária pode exportar OFX amanhã.
 estava errada** — eco direto do caso 003. A regra "descarte a segunda
 tabela" nasceu de UM arquivo, em que ela repetia a principal. O export
 seguinte provou o contrário: a tabela principal do Bradesco atrasa dias, e
-a recapitulacao era a unica portadora dos movimentos mais recentes
-do periodo. Descarta-la perdia os lancamentos mais recentes;
-a soma dos lancamentos no banco divergia da do extrato. Regra final:
+a recapitulação era a única portadora dos movimentos mais recentes do
+período. Descartá-la perdia justamente os lançamentos novos, e a soma dos
+lançamentos no banco passava a divergir da do extrato. Regra final:
 recapitulação é lida com abate — tupla já vista na principal é repetição,
 tupla inédita é movimento. Auditoria que pegou: somar os lançamentos e
 conferir contra o saldo real informado pelo autor. Dois exports diferentes

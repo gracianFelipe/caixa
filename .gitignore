@@ -5,13 +5,16 @@ local.ps1
 *.pem
 *.key
 
-# Extratos e dados reais: PII financeira, nunca versionada.
+# Extratos e dados reais: PII financeira, nunca versionada. O CSV entrou
+# nesta lista na spec 015: o Bradesco so exporta CSV, e sem a regra um
+# extrato real entra por descuido num `git add .`.
+*.csv
 *.ofx
 *.qfx
-extratos/
 *.eml
-# Excecao consciente, arquivo a arquivo: so fixture 100% sintetica entra.
-!internal/adaptadores/entrada/extrato/testdata/sintetico_basico.ofx
+extratos/
+# Excecao consciente: so fixture 100% sintetica entra, pelo prefixo.
+!internal/adaptadores/entrada/extrato/testdata/sintetico_*
 
 # Binarios compilados
 /caixa

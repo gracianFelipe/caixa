@@ -14,10 +14,11 @@ spec, o produto não recebe os dados reais que justificam sua existência.
 Este é o risco nº 1 do plano se materializando de uma forma que não estava
 prevista: a suposição não era "o parser está errado", era "o formato existe".
 
-## O arquivo real
+## O formato do arquivo
 
-Exportado de conta corrente, UTF-8 **com BOM** (`EF BB BF`), `;` como
-separador, algumas centenas de linhas:
+Estrutura do CSV que o Bradesco exporta de conta corrente: UTF-8 **com BOM**
+(`EF BB BF`), `;` como separador, algumas centenas de linhas. O exemplo
+abaixo é **sintético** — o formato é real, os dados não (spec 015).
 
 ```
 Extrato de: Ag: NNNN | Conta: NNNNN-N;;;;;

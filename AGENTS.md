@@ -205,6 +205,25 @@ checklist-seguranca.md (secrets, injection, IV/OE, authn/authz,
 fail secure, deps, headers, rate limit, IDOR/SSRF, logging).
 Se violar alguma, avise antes de entregar.
 
+### Dado real nunca é versionado (spec 015)
+
+O repo é **público**. A regra de Logging do SEC-CHECK valia para log; uma
+auditoria externa mostrou que o dado escapou pelo que o checklist não
+cobria — spec, doc e mensagem de commit. Passa a valer em todos eles:
+
+* **Spec, doc, teste, fixture e mensagem de commit usam apenas dados
+  sintéticos.** Nunca linha, total, saldo, número de documento ou contagem
+  vinda do extrato real.
+* **Revisão de IA cita divergência em termos relativos** ("a soma do banco
+  divergia da do extrato"), nunca com os valores que divergiram.
+* **Nenhuma credencial, usuário de login ou token em arquivo versionado** —
+  nem como exemplo. Exemplo de `.env` usa `...` como placeholder.
+* Extrato real (`.csv`, `.ofx`, `.qfx`, `.eml`) é ignorado pelo
+  `.gitignore` em qualquer pasta; a exceção é só o prefixo
+  `testdata/sintetico_*`.
+* Ao descrever um achado sobre dado real, refira-se a ele por
+  **arquivo:linha e tipo**, nunca pelo valor.
+
 Para auditoria completa de um arquivo específico, use o prompt da seção 0
 desse mesmo arquivo.
 

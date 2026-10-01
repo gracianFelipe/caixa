@@ -83,7 +83,8 @@ numa entrevista técnica. Os contratos que o código obedece estão em
   sem FITID). Identidade sintetizada por impressão + ordinal — duas linhas
   idênticas no mesmo dia não colapsam; a seção "Últimos Lancamentos" do fim
   do arquivo (que repete movimentos) é descartada para não duplicar.
-  Validado contra o extrato real do autor, com reimportacao provando
+  Validado contra o extrato real do autor: reimportar o mesmo arquivo não
+  cria lançamento nenhum, e a soma do banco fecha com o saldo do extrato.
   A seção "Últimos Lancamentos" é lida com abate: repetição da tabela
   principal sai, movimento inédito entra (a principal atrasa dias).
   **Regra de uso: exportar sempre o período completo** (o Bradesco renomeia

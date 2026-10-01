@@ -21,7 +21,7 @@ git clone https://github.com/gracianFelipe/caixa.git && cd caixa/deploy
 # 1. segredos (arquivo .env NUNCA commitado; ja coberto pelo .gitignore)
 cat > .env <<FIM
 CAIXA_BD_SENHA=...            # sem espaco nem aspas simples
-CAIXA_USUARIO=usuario_teste
+CAIXA_USUARIO=...            # escolha o seu; nao versione o valor real
 CAIXA_SENHA_HASH=...          # gere na SUA maquina: go run ./cmd/caixactl senha
 CAIXA_TELEGRAM_TOKEN=...
 CAIXA_TELEGRAM_CHAT_ID=...
