@@ -175,6 +175,42 @@ Lição registrada: verificação de front precisa rodar no ambiente real do
 usuário (largura, tema do SO, service worker já instalado), não só no
 viewport que eu escolhi.
 
+## 008 — Auditoria feita por IA tinha uma lacuna: mensagens de commit
+
+**Quando:** 2026-10-01, spec 015.
+
+**O que a IA entregou:** uma auditoria de vazamentos do repositório, feita
+em outra sessão, com dois agentes conferindo de forma independente (um por
+clone, outro pela API do GitHub). O relatório era bom: achados ordenados
+por gravidade, cada um com arquivo, linha, commit de origem e data, e
+nenhum valor real copiado para o texto. Classificou corretamente como "sem
+ação" as credenciais de teste e as fixtures sintéticas.
+
+**O que faltou:** o relatório cobria **arquivos**. Antes de reescrever o
+histórico, procurei os mesmos dados nas **mensagens de commit** — e estavam
+lá, em dois commits: a contagem de lançamentos importados do extrato real e
+as duas somas (banco × extrato). Nenhum dos dois agentes olhou ali. Se eu
+tivesse executado o plano como recebido, o `--replace-text` teria limpado
+os arquivos e deixado o mesmo dado visível em `git log`, e o force-push
+daria a impressão de missão cumprida.
+
+**Por que a lacuna é previsível:** a busca foi desenhada em cima de
+`git log -S` e `git grep`, que varrem conteúdo versionado. Mensagem de
+commit não é conteúdo versionado — é metadado, e sai por outra opção do
+filter-repo (`--replace-message`). Quem pensa o problema como "achar
+strings nos arquivos" não enxerga esse canal.
+
+**O que também passou:** o Gitleaks local e o secret scanning do GitHub
+(que está ativo) não apontaram nada — e estão certos. Eles procuram
+**formato de credencial**; aqui o dado era extrato bancário pessoal, que
+não tem formato reconhecível. Ferramenta de secret scanning não substitui
+revisão de quem sabe o que o dado significa.
+
+**Correção estrutural:** a regra de dado sintético virou contrato no
+AGENTS.md cobrindo spec, doc, teste, fixture **e mensagem de commit** — o
+SEC-CHECK só falava de log, e foi exatamente pelo que ele não cobria que o
+dado escapou.
+
 ## Decisões discutidas e mantidas (não são rejeições)
 
 Registradas para mostrar que houve decisão, não omissão.

@@ -1,6 +1,6 @@
 # 015 — Higiene de dados reais em specs, docs e testes
 
-Status: em execução
+Status: concluída em 2026-10-01 (Fase 1 e 2 feitas e verificadas; Fase 3 depende de chamado no GitHub Support, com o autor)
 Origem: auditoria externa de vazamentos (sessão separada, `C:\scripts\vagas`),
 relatório entregue pelo autor em 2026-10-01.
 
@@ -43,6 +43,19 @@ Os testes que classificam `EMPRESTIMO PESSOAL` e `PARCELA CREDITO PESSOAL`
 sem a afirmação "observado na conta real" da spec 013, não dizem nada sobre
 a conta do autor.
 
+## Achado adicional: mensagens de commit
+
+A auditoria cobria arquivos. A mesma busca aplicada às **mensagens de
+commit** achou dado financeiro real em dois commits (contagem de
+lançamentos importados e as duas somas da divergência). Mensagem de commit
+não é conteúdo versionado e sai por outra opção do filter-repo
+(`--replace-message`), não por `--replace-text`. Registrado como caso 008
+em `docs/revisao-ia.md`.
+
+Dois outros commits que a busca por padrão marcou eram falso positivo:
+limiar de orçamento (`80/100%`) e a tabela de pontuação da conciliação —
+parâmetros de algoritmo, não dados de conta.
+
 ## Fase 2 — histórico do git
 
 Reescrita com `git filter-repo --replace-text` numa cópia-espelho fora do
@@ -83,3 +96,17 @@ gitleaks detect --no-git -v        # se instalado localmente
 ```
 Mais: busca pelos valores reais em todas as revisões deve voltar vazia
 depois da Fase 2 (script que imprime só contagens).
+
+## Resultado (2026-10-01)
+
+* Fase 1: 17 substituições em 5 arquivos, `.gitignore` e `AGENTS.md`
+  atualizados, `go test`/`vet`/`gofmt` verdes, Gitleaks local sem achados.
+* Fase 2: histórico reescrito com `--replace-text` e `--replace-message`;
+  20 commits preservados, 8 SHAs alterados, mais antigo `e479bdd`.
+  Busca pelos valores reais em todas as revisões do repositório remoto:
+  zero ocorrências em blobs e em mensagens. HEAD reescrito compila e passa
+  nos testes. Repositório sem forks no momento da operação.
+* Usuário de login de produção trocado pelo autor; o valor vive apenas no
+  `local.ps1` (gitignored) e o login foi reconfirmado contra a API.
+* Rate limit do login já existia (5 tentativas/minuto por IP): a pendência
+  levantada pela auditoria não virou spec.
